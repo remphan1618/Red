@@ -53,4 +53,4 @@ jobs:
       # Step 5: Print the image digest (like a fingerprint) if it was pushed
       - name: Image digest
         if: steps.build-and-push.outputs.digest != ''
-        run: echo "Pushed image digest: ${{ steps.build-and-push.outputs.digest }}"
+        run: echo "Pushed image digest - ${{ steps.build-and-push.outputs.digest }}"
