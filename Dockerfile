@@ -38,6 +38,7 @@ ENV HOME=/root \
 WORKDIR $HOME
 
 ### Install dependencies: Base Utils, System Python, SSH Server, Supervisor
+# Combine update, install, setup, and cleanup in one RUN command to reduce layers
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     git \
@@ -56,13 +57,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Set timezone
     && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
-    # Clean up apt cache
+    # *** Aggressive Cleanup within the same layer ***
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     # Ensure pip is up to date for the system Python
     python3 -m pip install --no-cache-dir --upgrade pip
 
 ### Configure SSH Server (Allow Root Login via key, disable password auth)
+# This RUN command doesn't install packages, so no apt cleanup needed here
 RUN mkdir -p /var/run/sshd /root/.ssh && \
     chmod 700 /root/.ssh && \
     # Allow root login (needed for key injection on platforms like Vast.ai)
@@ -71,6 +73,7 @@ RUN mkdir -p /var/run/sshd /root/.ssh && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
 
 ### Configure Supervisor
+# This RUN command doesn't install packages, so no apt cleanup needed here
 RUN mkdir -p /etc/supervisor/conf.d
 # Copy the supervisor config file from the build context
 COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -83,6 +86,8 @@ ADD ./src/debian/install/ $INST_SCRIPTS/
 RUN chmod 765 $INST_SCRIPTS/*
 
 ### Run Installers from the INST_SCRIPTS directory
+# These scripts might run apt-get internally, which can leave cache.
+# Ideally, modify the scripts themselves to clean up, but that's outside the Dockerfile.
 RUN $INST_SCRIPTS/tools.sh
 RUN $INST_SCRIPTS/install_custom_fonts.sh
 RUN $INST_SCRIPTS/tigervnc.sh
@@ -91,6 +96,8 @@ RUN $INST_SCRIPTS/firefox.sh
 # *** IMPORTANT: Ensure 'icewm_ui.sh' exists in src/debian/install and installs IceWM ***
 RUN $INST_SCRIPTS/icewm_ui.sh
 RUN $INST_SCRIPTS/libnss_wrapper.sh
+# Add a cleanup step after running external installers, though less effective than in-script cleanup
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 ### Add IceWM runtime config (e.g., wm_startup.sh)
 ADD ./src/debian/icewm/ $HOME/
@@ -105,14 +112,12 @@ RUN git clone https://github.com/remphan1618/VisoMaster.git
 WORKDIR $HOME/VisoMaster
 
 # Install Python dependencies using requirements.txt (using system pip)
+# --no-cache-dir helps reduce space during the build
 RUN pip install --no-cache-dir -r requirements.txt
 # Keep scikit-image install (using system pip)
 RUN pip install --no-cache-dir scikit-image
 
 # --- Model download steps REMOVED ---
-# RUN mkdir -p ./dependencies # Ensure directory exists
-# RUN wget -O ./dependencies/ffmpeg.exe https://github.com/visomaster/visomaster-assets/releases/download/v0.1.0_dp/ffmpeg.exe
-# RUN python3 download_models.py
 # --- End of removed steps ---
 
 ### Install jupyterlab using system pip
@@ -120,17 +125,19 @@ RUN pip install --no-cache-dir jupyterlab
 # Port 8888 already exposed
 
 ### Install filebrowser
+# This script installs a binary, doesn't use apt
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 # Expose filebrowser port if you intend to run it manually or via supervisor
 EXPOSE 8585
 
 ### Install extra libraries (GUI/Qt/File Manager)
+# Combine update, install, and cleanup in one RUN command
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl1 libgl1-mesa-glx libglib2.0-0 \
     libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0 \
     libqt5gui5 libqt5core5a libqt5widgets5 libqt5x11extras5 \
     pcmanfm \
-    # Clean up apt cache
+    # *** Aggressive Cleanup within the same layer ***
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ### Copy main startup script and set permissions
@@ -144,3 +151,4 @@ ENV VNC_RESOLUTION=1280x1024
 # Set the entrypoint to run Supervisor, which manages other processes
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 # CMD is not needed when using supervisor as entrypoint
+
