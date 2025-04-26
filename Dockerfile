@@ -109,17 +109,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Keep scikit-image install (using system pip)
 RUN pip install --no-cache-dir scikit-image
 
-# Keep model/dependency downloads as removal was not explicitly requested
-RUN mkdir -p ./dependencies # Ensure directory exists
-RUN wget -O ./dependencies/ffmpeg.exe https://github.com/visomaster/visomaster-assets/releases/download/v0.1.0_dp/ffmpeg.exe
-RUN python3 download_models.py
+# --- Model download steps REMOVED ---
+# RUN mkdir -p ./dependencies # Ensure directory exists
+# RUN wget -O ./dependencies/ffmpeg.exe https://github.com/visomaster/visomaster-assets/releases/download/v0.1.0_dp/ffmpeg.exe
+# RUN python3 download_models.py
+# --- End of removed steps ---
 
 ### Install jupyterlab using system pip
 RUN pip install --no-cache-dir jupyterlab
 # Port 8888 already exposed
 
 ### Install filebrowser
-RUN wget -O - https://github.com/filebrowser/get/master/get.sh | bash
+RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 # Expose filebrowser port if you intend to run it manually or via supervisor
 EXPOSE 8585
 
