@@ -61,7 +61,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     # Ensure pip is up to date for the system Python
-    python3 -m pip install --no-cache-dir --upgrade pip
+    python3 -m pip install --no-cache-dir --upgrade pip && \
+    # *** Clean pip cache ***
+    rm -rf /root/.cache/pip
 
 ### Configure SSH Server (Allow Root Login via key, disable password auth)
 # This RUN command doesn't install packages, so no apt cleanup needed here
@@ -113,15 +115,21 @@ WORKDIR $HOME/VisoMaster
 
 # Install Python dependencies using requirements.txt (using system pip)
 # --no-cache-dir helps reduce space during the build
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    # *** Clean pip cache ***
+    rm -rf /root/.cache/pip
 # Keep scikit-image install (using system pip)
-RUN pip install --no-cache-dir scikit-image
+RUN pip install --no-cache-dir scikit-image && \
+    # *** Clean pip cache ***
+    rm -rf /root/.cache/pip
 
 # --- Model download steps REMOVED ---
 # --- End of removed steps ---
 
 ### Install jupyterlab using system pip
-RUN pip install --no-cache-dir jupyterlab
+RUN pip install --no-cache-dir jupyterlab && \
+    # *** Clean pip cache ***
+    rm -rf /root/.cache/pip
 # Port 8888 already exposed
 
 ### Install filebrowser
