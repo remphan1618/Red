@@ -1,14 +1,14 @@
-# Base image (CUDA 12.4.1)
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# Use the smaller runtime base image
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 # Set a refresh date (adjust as needed)
 ENV REFRESHED_AT 2024-08-12
 
 # Labels describing the image
-LABEL io.k8s.description="Headless VNC Container with IceWM, Jupyter, SSH, VisoMaster for Vast.ai" \
-      io.k8s.display-name="VNC IceWM VisoMaster" \
+LABEL io.k8s.description="Headless VNC Container with IceWM, Jupyter, SSH, VisoMaster for Vast.ai (Runtime Base)" \
+      io.k8s.display-name="VNC IceWM VisoMaster Runtime" \
       io.openshift.expose-services="6901:http,5901:xvnc,8888:http,22:ssh" \
-      io.openshift.tags="vnc, icewm, jupyter, ssh, vastai, visomaster" \
+      io.openshift.tags="vnc, icewm, jupyter, ssh, vastai, visomaster, runtime" \
       io.openshift.non-scalable=true
 
 ### Connection ports Environment Variables
@@ -39,6 +39,7 @@ WORKDIR $HOME
 
 ### Install dependencies: Base Utils, System Python, SSH Server, Supervisor
 # Combine update, install, setup, and cleanup in one RUN command to reduce layers
+# Note: build-essential might not be strictly needed with runtime image, but keep for now in case pip needs it
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     git \
@@ -66,18 +67,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /root/.cache/pip
 
 ### Configure SSH Server (Allow Root Login via key, disable password auth)
-# This RUN command doesn't install packages, so no apt cleanup needed here
 RUN mkdir -p /var/run/sshd /root/.ssh && \
     chmod 700 /root/.ssh && \
-    # Allow root login (needed for key injection on platforms like Vast.ai)
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    # Disable password authentication for security (rely on keys)
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
 
 ### Configure Supervisor
-# This RUN command doesn't install packages, so no apt cleanup needed here
 RUN mkdir -p /etc/supervisor/conf.d
-# Copy the supervisor config file from the build context
 COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 ### Add install scripts from src/common and src/debian into the image
@@ -88,17 +84,18 @@ ADD ./src/debian/install/ $INST_SCRIPTS/
 RUN chmod 765 $INST_SCRIPTS/*
 
 ### Run Installers from the INST_SCRIPTS directory
-# These scripts might run apt-get internally, which can leave cache.
-# Ideally, modify the scripts themselves to clean up, but that's outside the Dockerfile.
 RUN $INST_SCRIPTS/tools.sh
 RUN $INST_SCRIPTS/install_custom_fonts.sh
+# --- Keep TigerVNC (VNC Server) ---
 RUN $INST_SCRIPTS/tigervnc.sh
+# --- Keep noVNC (Web VNC Client) ---
 RUN $INST_SCRIPTS/no_vnc_1.5.0.sh
-RUN $INST_SCRIPTS/firefox.sh
-# *** IMPORTANT: Ensure 'icewm_ui.sh' exists in src/debian/install and installs IceWM ***
+# --- REMOVED Firefox installation ---
+# RUN $INST_SCRIPTS/firefox.sh
+# --- Install IceWM ---
 RUN $INST_SCRIPTS/icewm_ui.sh
 RUN $INST_SCRIPTS/libnss_wrapper.sh
-# Add a cleanup step after running external installers, though less effective than in-script cleanup
+# Add a cleanup step after running external installers
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 ### Add IceWM runtime config (e.g., wm_startup.sh)
@@ -114,7 +111,6 @@ RUN git clone https://github.com/remphan1618/VisoMaster.git
 WORKDIR $HOME/VisoMaster
 
 # Install Python dependencies using requirements.txt (using system pip)
-# --no-cache-dir helps reduce space during the build
 RUN pip install --no-cache-dir -r requirements.txt && \
     # *** Clean pip cache ***
     rm -rf /root/.cache/pip
@@ -124,7 +120,6 @@ RUN pip install --no-cache-dir scikit-image && \
     rm -rf /root/.cache/pip
 
 # --- Model download steps REMOVED ---
-# --- End of removed steps ---
 
 ### Install jupyterlab using system pip
 RUN pip install --no-cache-dir jupyterlab && \
@@ -133,7 +128,6 @@ RUN pip install --no-cache-dir jupyterlab && \
 # Port 8888 already exposed
 
 ### Install filebrowser
-# This script installs a binary, doesn't use apt
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 # Expose filebrowser port if you intend to run it manually or via supervisor
 EXPOSE 8585
@@ -149,7 +143,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ### Copy main startup script and set permissions
-# This script is expected to be run by Supervisor
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
 
@@ -159,4 +152,3 @@ ENV VNC_RESOLUTION=1280x1024
 # Set the entrypoint to run Supervisor, which manages other processes
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 # CMD is not needed when using supervisor as entrypoint
-
