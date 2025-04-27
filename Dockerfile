@@ -5,13 +5,12 @@ FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 ENV REFRESHED_AT 2024-08-12
 
 # == Environment Variables ==
-# Define static ENV vars early for better layer caching
-# *** Using /workspace ***
-ENV HOME=/workspace \
+ENV HOME=/root \
     TERM=xterm \
     STARTUPDIR=/dockerstartup \
-    INST_SCRIPTS=/workspace/install \
-    NO_VNC_HOME=/workspace/noVNC \
+    # *** Using /install for install scripts ***
+    INST_SCRIPTS=/install \
+    NO_VNC_HOME=/noVNC \
     VENV_PATH=/opt/venv \
     DEBIAN_FRONTEND=noninteractive \
     VNC_COL_DEPTH=24 \
@@ -21,23 +20,15 @@ ENV HOME=/workspace \
     LANG='en_US.UTF-8' \
     LANGUAGE='en_US:en' \
     LC_ALL='en_US.UTF-8' \
-    # Add VENV to PATH
     PATH="/opt/venv/bin:$PATH"
 
-# Set working directory BEFORE creating it
-# *** Using /workspace ***
-WORKDIR /workspace
-
-# Create the working directory
-# *** Using /workspace ***
-RUN mkdir -p /workspace && chown root:root /workspace
+# Set working directory to root
+WORKDIR /
 
 # == Expose Ports ==
-# Explicitly list ports instead of using ENV vars in EXPOSE
 EXPOSE 5901 6901 8888 22 8585
 
 # == Install System Dependencies ==
-# Combine all apt-get operations into a single RUN layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget git build-essential software-properties-common apt-transport-https \
     ca-certificates unzip ffmpeg tzdata python3 python3-pip python3-venv \
@@ -49,94 +40,79 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # == Configure SSH Server ==
-# Create .ssh dir in /root with correct initial permissions for key injection
+# Keep SSH config targeted at /root/.ssh
 RUN mkdir -p /root/.ssh && \
     chmod 700 /root/.ssh && \
-    # Configure sshd_config
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && \
-    # Disable strict modes for potentially problematic home dir permissions
     echo "StrictModes no" >> /etc/ssh/sshd_config && \
-    # Ensure sshd directory exists
     mkdir -p /var/run/sshd
 
 # == Configure Supervisor ==
 RUN mkdir -p /etc/supervisor/conf.d
-# Use lowercase 'src'
 COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # == Add and Run Install Scripts ==
-# Add scripts from both common and debian install directories
-# *** Using /workspace ***
+# *** Using /install ***
 RUN mkdir -p $INST_SCRIPTS
-# Use lowercase 'common'
 ADD ./src/common/install/ $INST_SCRIPTS/
 ADD ./src/debian/install/ $INST_SCRIPTS/
 RUN chmod 765 $INST_SCRIPTS/*
 
-# Run Installers (Ensure these scripts exist in EITHER src/common/install OR src/debian/install)
+# Run Installers from /install
 RUN $INST_SCRIPTS/tools.sh
 RUN $INST_SCRIPTS/install_custom_fonts.sh
 RUN $INST_SCRIPTS/tigervnc.sh
 RUN $INST_SCRIPTS/no_vnc_1.5.0.sh
 RUN $INST_SCRIPTS/icewm_ui.sh
 RUN $INST_SCRIPTS/libnss_wrapper.sh
-# RUN $INST_SCRIPTS/firefox.sh # Firefox removed
-
-# Cleanup after running external installers
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# *** Changed ADD to COPY for icewm config ***
-COPY ./src/debian/icewm/ /workspace/ # IceWM runtime config
+# *** Copy IceWM config to /etc/icewm for clarity ***
+RUN mkdir -p /etc/icewm
+COPY ./src/debian/icewm/wm_startup.sh /etc/icewm/wm_startup.sh
+RUN chmod 755 /etc/icewm/wm_startup.sh
+
 RUN mkdir -p $STARTUPDIR
-# Add Common helper scripts
-# Use lowercase 'common'
 ADD ./src/common/scripts $STARTUPDIR
-# Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-# *** Using /workspace ***
-COPY ./src/provisioning_script.sh /workspace/provisioning_script.sh
-RUN chmod +x /workspace/provisioning_script.sh
+# *** Copy provisioning script to / ***
+COPY ./src/provisioning_script.sh /provisioning_script.sh
+RUN chmod +x /provisioning_script.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
 
 # == Setup Python Virtual Environment and Install Dependencies ==
 RUN python3 -m venv $VENV_PATH
 RUN . $VENV_PATH/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
-    # Repo is cloned by provisioning_script.sh into /workspace
-    # Install base requirements if any, plus scikit-image, jupyterlab, and tqdm
+    # Repo is cloned by provisioning_script.sh into /VisoMaster
     pip install --no-cache-dir scikit-image jupyterlab tqdm && \
-    rm -rf /root/.cache/pip # Pip cache is still under /root usually
+    rm -rf /root/.cache/pip
 
-# Set WORKDIR explicitly again just to be sure
-# *** Using /workspace ***
-WORKDIR /workspace
+# Set WORKDIR back to / just in case
+WORKDIR /
 
 # == Install File Browser ==
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # == Final Setup & Permission Fixes ==
-# Run permission script if it exists and does other things
-# *** Using /workspace ***
-RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /workspace; fi
-# *** Fix /root/.ssh ownership/permissions for SSH keys ***
-# *** Keep targeting /root/.ssh as that's where Vast.ai likely injects keys ***
+# *** Target /VisoMaster for permissions if needed ***
+RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /VisoMaster; fi
+# Fix /root/.ssh permissions
 RUN mkdir -p /root/.ssh && \
     chown root:root /root/.ssh && \
     chmod 700 /root/.ssh && \
-    # Set permissions for authorized_keys if it exists (Vast.ai creates this later)
     touch /root/.ssh/authorized_keys && \
     chmod 600 /root/.ssh/authorized_keys
 
-# *** Using /workspace ***
-COPY ./src/debug_toolkit.ipynb /workspace/debug_toolkit.ipynb
+# *** Copy debug notebook to / ***
+COPY ./src/debug_toolkit.ipynb /debug_toolkit.ipynb
 
-# Set default VNC resolution (can be overridden at runtime)
+# Set default VNC resolution
 ENV VNC_RESOLUTION=1280x1024
 
 # == Entrypoint ==
-# Use Supervisor to manage services
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # --- Notes ---
