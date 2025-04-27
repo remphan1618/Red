@@ -2,7 +2,7 @@
 # DEBUG VERSION - Skips long installs and downloads to test Supervisor startup.
 
 # --- Define Paths and Variables ---
-PROJECT_PARENT_DIR="/root"
+PROJECT_PARENT_DIR="/workspace"
 VISOMASTER_REPO_NAME="VisoMaster"
 VISOMASTER_ROOT_DIR="$PROJECT_PARENT_DIR/$VISOMASTER_REPO_NAME"
 VISOMASTER_REPO_URL="https://github.com/remphan1618/VisoMaster.git"
