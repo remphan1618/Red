@@ -62,8 +62,8 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/visomasterdockah:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/visomasterdockah:${{ github.sha }}
           # Configure caching using GitHub Actions cache for faster rebuilds
-          cache-from: type=gha
-          cache-to: type=gha,mode=max # 'max' mode includes intermediate layers in the cache
+          #cache-from: type=gha
+         # cache-to: type=gha,mode=max # 'max' mode includes intermediate layers in the cache
 
       # Step 5: Output the digest (unique identifier) of the pushed image
       - name: Image digest
