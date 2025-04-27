@@ -50,13 +50,13 @@ RUN mkdir -p /var/run/sshd /root/.ssh && \
 
 # == Configure Supervisor ==
 RUN mkdir -p /etc/supervisor/conf.d
-# *** Corrected Path: Copy from src/ directly ***
+# Use lowercase 'src'
 COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # == Add and Run Install Scripts ==
 # Add scripts from both common and debian install directories
 RUN mkdir -p $INST_SCRIPTS
-# *** Reinstated ADD for src/common/install ***
+# Use lowercase 'common'
 ADD ./src/common/install/ $INST_SCRIPTS/
 ADD ./src/debian/install/ $INST_SCRIPTS/
 RUN chmod 765 $INST_SCRIPTS/*
@@ -77,11 +77,11 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 # == Add Runtime Configs and Scripts ==
 ADD ./src/debian/icewm/ $HOME/ # IceWM runtime config
 RUN mkdir -p $STARTUPDIR
-# *** Reinstated ADD for src/common/scripts ***
+# Use lowercase 'common'
 ADD ./src/common/scripts $STARTUPDIR # Common helper scripts
-# *** Corrected Path: Copy from src/ directly ***
+# Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-# *** Corrected Path: Copy from src/ directly ***
+# Use lowercase 'src'
 COPY ./src/provisioning_script.sh /root/provisioning_script.sh
 RUN chmod +x /root/provisioning_script.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
@@ -103,6 +103,7 @@ RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | 
 
 # == Final Setup ==
 # Run permission script last, ensure it exists in src/common/install or src/debian/install
+# Ensure set_user_permission.sh exists in one of the install dirs added above
 RUN $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR $HOME
 
 # Set default VNC resolution (can be overridden at runtime)
