@@ -97,8 +97,9 @@ WORKDIR /
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # == Final Setup & Permission Fixes ==
-# *** Target /VisoMaster for permissions if needed ***
-RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /VisoMaster; fi
+# *** REMOVED execution of set_user_permission.sh ***
+# RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /VisoMaster; fi
+
 # Fix /root/.ssh permissions
 RUN mkdir -p /root/.ssh && \
     chown root:root /root/.ssh && \
