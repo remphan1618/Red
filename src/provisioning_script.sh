@@ -1,6 +1,6 @@
 #!/bin/bash
-# This script clones the repo, activates venv, installs TensorRT and tqdm,
-# downloads models, overwrites the inswapper model, and creates output directories.
+# This script clones the repo, activates venv, installs TensorRT, downloads models,
+# overwrites the inswapper model, and creates output directories.
 # It's intended to be copied into the Docker image and run via the Vast.ai On-Start field.
 
 # --- Define Paths and Variables ---
@@ -16,8 +16,10 @@ VENV_PATH="/opt/venv"
 LOG_FILE="$PROJECT_PARENT_DIR/onstart_script.log" # Log file location
 
 # Specific Inswapper Model Details
+# Updated URL
 INSWAPPER_URL="https://huggingface.co/Red1618/Viso/resolve/main/inswapper_128_fp16.onnx?download=true"
 DOWNLOADED_INSWAPPER_NAME="inswapper_128_fp16.onnx.download" # Temporary download name
+# Assuming the target directory is within the cloned repo structure
 TARGET_MODEL_DIR="$VISOMASTER_ROOT_DIR/models" # Adjust if the model path is different
 TARGET_INSWAPPER_NAME="inswapper_128_fp16.onnx" # Final name in the target directory
 
@@ -42,6 +44,8 @@ if [ ! -d "$VISOMASTER_ROOT_DIR" ]; then
   echo "Cloned."
 else
   echo "VisoMaster directory exists, skipping clone."
+  # Optional: Add git pull if needed
+  # cd "$VISOMASTER_ROOT_DIR" && git pull origin main || echo "Git pull failed."
 fi
 
 # --- Create Required Directories ---
@@ -63,11 +67,6 @@ if [ ! -f "$TENSORRT_REQS_FULL_PATH" ]; then echo "ERROR: TensorRT reqs file ($T
 pip install -r "$TENSORRT_REQS_FULL_PATH" --no-cache-dir
 echo "TensorRT install finished."
 
-# --- Install tqdm (Needed for download script) ---
-echo "Installing tqdm..."
-pip install tqdm --no-cache-dir
-echo "tqdm installed."
-
 # --- Download VisoMaster Models ---
 echo "Downloading models..."
 if [ ! -f "$MODEL_DOWNLOAD_SCRIPT_FULL_PATH" ]; then echo "ERROR: Model download script ($MODEL_DOWNLOAD_SCRIPT_NAME) not found in repo!" >&2; exit 1; fi
@@ -80,12 +79,17 @@ echo "Model download finished."
 
 # --- Download and Overwrite Specific Inswapper Model ---
 echo "Downloading specific inswapper model from $INSWAPPER_URL..."
+# Ensure the target model directory exists (the download script should create it, but check just in case)
 mkdir -p "$TARGET_MODEL_DIR" || { echo "ERROR: Failed to create target model directory $TARGET_MODEL_DIR" >&2; exit 1; }
+# Download the file using wget to a temporary name in the target directory
+# Using --output-document (-O) to specify the output file name
 wget -O "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$INSWAPPER_URL"
 if [ $? -ne 0 ]; then echo "ERROR: Failed to download inswapper model!" >&2; exit 1; fi
 echo "Inswapper model downloaded."
 
+# Rename the downloaded file to the target name, overwriting if it exists
 echo "Renaming/Overwriting $DOWNLOADED_INSWAPPER_NAME to $TARGET_INSWAPPER_NAME in $TARGET_MODEL_DIR..."
+# Use mv -f to force overwrite without prompting
 mv -f "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$TARGET_MODEL_DIR/$TARGET_INSWAPPER_NAME"
 if [ $? -ne 0 ]; then echo "ERROR: Failed to rename/overwrite inswapper model!" >&2; exit 1; fi
 echo "Inswapper model replaced successfully."
