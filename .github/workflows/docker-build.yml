@@ -47,12 +47,15 @@ jobs:
           # IMPORTANT: Use a Docker Hub Access Token stored in secrets, not your password!
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
+      # Step 3.5: Prune builder cache to remove potentially corrupted state
+      - name: Prune builder cache (force clean)
+        run: docker buildx prune -f
+
       # Step 4: Build the Docker image using the Dockerfile and push it to Docker Hub
       - name: Build and push Docker image
         id: build-and-push # Give this step an ID to reference its outputs later
         uses: docker/build-push-action@v5
-        with:  # <- Line 54
-          # Ensure lines below are indented correctly (typically 2 spaces more than 'with:')
+        with:
           context: . # Define the build context (current directory)
           file: ./Dockerfile # Specify the path to the Dockerfile
           # Push the image only when triggered by a push to main or manually
@@ -61,9 +64,12 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/visomasterdockah:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/visomasterdockah:${{ github.sha }}
-          # Configure caching using GitHub Actions cache for faster rebuilds
-          #cache-from: type=gha
-         # cache-to: type=gha,mode=max # 'max' mode includes intermediate layers in the cache
+          # *** ADDED: Add a build argument that changes every run to force re-evaluation ***
+          build-args: |
+            CACHE_BUSTER=${{ github.run_id }}
+          # *** Keep caching disabled for this test run ***
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
 
       # Step 5: Output the digest (unique identifier) of the pushed image
       - name: Image digest
