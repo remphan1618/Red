@@ -108,17 +108,8 @@ RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | 
 # Ensure set_user_permission.sh exists in one of the install dirs added above
 RUN $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR $HOME
 
-# *** ADDED: Create multiple useful aliases ***
-RUN echo >> /root/.bashrc && \
-    echo "# --- Custom Aliases ---" >> /root/.bashrc && \
-    echo "alias ll='ls -alF'" >> /root/.bashrc && \
-    echo "alias la='ls -A'" >> /root/.bashrc && \
-    echo "alias l='ls -CF'" >> /root/.bashrc && \
-    echo "alias ..='cd ..'" >> /root/.bashrc && \
-    echo "alias startlog='tail -f /root/onstart_script.log'" >> /root/.bashrc && \
-    echo "alias vncstatus='supervisorctl status'" >> /root/.bashrc && \
-    echo "alias runviso='cd /root/VisoMaster && source /opt/venv/bin/activate && python main.py'" >> /root/.bashrc && \
-    echo "# --- End Custom Aliases ---" >> /root/.bashrc
+# *** ADDED: Create an alias for tailing the onstart log ***
+RUN echo "alias onstartlog='tail -f /root/onstart_script.log'" >> /root/.bashrc
 
 # Set default VNC resolution (can be overridden at runtime)
 ENV VNC_RESOLUTION=1280x1024
@@ -130,3 +121,4 @@ ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 # --- Notes ---
 # Remember to create a .dockerignore file.
 # Consider pinning versions.
+
