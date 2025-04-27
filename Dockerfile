@@ -87,8 +87,8 @@ RUN $INST_SCRIPTS/libnss_wrapper.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# *** Using /workspace ***
-ADD ./src/debian/icewm/ /workspace/ # IceWM runtime config
+# *** Changed ADD to COPY for icewm config ***
+COPY ./src/debian/icewm/ /workspace/ # IceWM runtime config
 RUN mkdir -p $STARTUPDIR
 # Add Common helper scripts
 # Use lowercase 'common'
