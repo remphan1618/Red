@@ -6,7 +6,8 @@ ENV REFRESHED_AT 2024-08-12
 
 # == Environment Variables ==
 # Define static ENV vars early for better layer caching
-ENV HOME=/root \
+# *** Changed HOME to /workspace ***
+ENV HOME=/workspace \
     TERM=xterm \
     STARTUPDIR=/dockerstartup \
     INST_SCRIPTS=/workspace/install \
@@ -23,8 +24,9 @@ ENV HOME=/root \
     # Add VENV to PATH
     PATH="/opt/venv/bin:$PATH"
 
-# Set working directory
-WORKDIR $HOME
+# Create and set working directory to /workspace
+RUN mkdir -p /workspace && chown root:root /workspace
+WORKDIR /workspace
 
 # == Expose Ports ==
 # Explicitly list ports instead of using ENV vars in EXPOSE
@@ -43,10 +45,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # == Configure SSH Server ==
-RUN mkdir -p /var/run/sshd /root/.ssh && \
+# Create .ssh dir in /root with correct initial permissions for key injection
+RUN mkdir -p /root/.ssh && \
     chmod 700 /root/.ssh && \
+    # Configure sshd_config
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && \
+    # Ensure sshd directory exists
+    mkdir -p /var/run/sshd
 
 # == Configure Supervisor ==
 RUN mkdir -p /etc/supervisor/conf.d
@@ -69,55 +75,61 @@ RUN $INST_SCRIPTS/no_vnc_1.5.0.sh
 RUN $INST_SCRIPTS/icewm_ui.sh
 RUN $INST_SCRIPTS/libnss_wrapper.sh
 # RUN $INST_SCRIPTS/firefox.sh # Firefox removed
-# RUN $INST_SCRIPTS/set_user_permission.sh # Moved later, after scripts are added
 
 # Cleanup after running external installers
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# Add IceWM runtime config
-ADD ./src/debian/icewm/ $HOME/
+# *** Changed target from $HOME to /workspace ***
+ADD ./src/debian/icewm/ /workspace/ # IceWM runtime config
 RUN mkdir -p $STARTUPDIR
 # Add Common helper scripts
 # Use lowercase 'common'
 ADD ./src/common/scripts $STARTUPDIR
 # Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-# Use lowercase 'src'
-COPY ./src/provisioning_script.sh /root/provisioning_script.sh
-RUN chmod +x /root/provisioning_script.sh
+# *** Changed target from /root to /workspace ***
+COPY ./src/provisioning_script.sh /workspace/provisioning_script.sh
+RUN chmod +x /workspace/provisioning_script.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
 
 # == Setup Python Virtual Environment and Install Dependencies ==
 RUN python3 -m venv $VENV_PATH
 RUN . $VENV_PATH/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
-    # Repo is cloned by provisioning_script.sh
+    # Repo is cloned by provisioning_script.sh into /workspace
     # Install base requirements if any, plus scikit-image, jupyterlab, and tqdm
-    # Add tqdm here as it's needed by the provisioning script's download step
     pip install --no-cache-dir scikit-image jupyterlab tqdm && \
-    rm -rf /root/.cache/pip
+    rm -rf /root/.cache/pip # Pip cache is still under /root usually
 
-# Set WORKDIR after installs if needed
-WORKDIR $HOME
+# Set WORKDIR explicitly again just to be sure
+WORKDIR /workspace
 
 # == Install File Browser ==
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
-# == Final Setup ==
-# Run permission script last, ensure it exists in src/common/install or src/debian/install
-# Ensure set_user_permission.sh exists in one of the install dirs added above
-RUN $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR $HOME
+# == Final Setup & Permission Fixes ==
+# Run permission script if it exists and does other things
+# *** Changed target from $HOME to /workspace ***
+RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /workspace; fi
+# *** Fix /root/.ssh ownership/permissions for SSH keys ***
+# *** Keep targeting /root/.ssh as that's where Vast.ai likely injects keys ***
+RUN mkdir -p /root/.ssh && \
+    chown root:root /root/.ssh && \
+    chmod 700 /root/.ssh && \
+    # Set permissions for authorized_keys if it exists (Vast.ai creates this later)
+    touch /root/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/authorized_keys
 
-# *** ADDED: Copy the debug notebook into the root directory ***
-COPY ./src/debug_toolkit.ipynb /root/debug_toolkit.ipynb
+# *** Changed target from /root to /workspace ***
+COPY ./src/debug_toolkit.ipynb /workspace/debug_toolkit.ipynb
 
 # Set default VNC resolution (can be overridden at runtime)
 ENV VNC_RESOLUTION=1280x1024
 
 # == Entrypoint ==
 # Use Supervisor to manage services
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # --- Notes ---
 # Remember to create a .dockerignore file.
