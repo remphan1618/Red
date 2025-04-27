@@ -75,10 +75,12 @@ RUN $INST_SCRIPTS/libnss_wrapper.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-ADD ./src/debian/icewm/ $HOME/ # IceWM runtime config
+# Add IceWM runtime config
+ADD ./src/debian/icewm/ $HOME/
 RUN mkdir -p $STARTUPDIR
+# Add Common helper scripts
 # Use lowercase 'common'
-ADD ./src/common/scripts $STARTUPDIR # Common helper scripts
+ADD ./src/common/scripts $STARTUPDIR
 # Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 # Use lowercase 'src'
@@ -112,6 +114,10 @@ ENV VNC_RESOLUTION=1280x1024
 # == Entrypoint ==
 # Use Supervisor to manage services
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+
+# --- Notes ---
+# Remember to create a .dockerignore file.
+# Consider pinning versions.
 
 # --- Notes ---
 # Remember to create a .dockerignore file.
