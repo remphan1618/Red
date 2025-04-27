@@ -1,10 +1,9 @@
 #!/bin/bash
-# This script clones the repo into /VisoMaster, activates venv, installs TensorRT, downloads models,
-# overwrites the inswapper model, and creates output directories. Logs go to /logs.
-# Run via Vast.ai On-Start: bash /provisioning_script.sh
+# This script clones the repo, activates venv, installs TensorRT, downloads models,
+# overwrites the inswapper model, creates output directories, AND STARTS VNC.
+# Logs go to /logs. Run via Vast.ai On-Start: bash /provisioning_script.sh
 
 # --- Define Paths and Variables ---
-# *** Using / as base ***
 PROJECT_PARENT_DIR="/"
 VISOMASTER_REPO_NAME="VisoMaster"
 VISOMASTER_ROOT_DIR="$PROJECT_PARENT_DIR$VISOMASTER_REPO_NAME" # Results in /VisoMaster
@@ -14,9 +13,9 @@ MODEL_DOWNLOAD_SCRIPT_FULL_PATH="$VISOMASTER_ROOT_DIR/$MODEL_DOWNLOAD_SCRIPT_NAM
 TENSORRT_REQS_FILE="requirements_cu124.txt" # Assuming this file exists in the repo
 TENSORRT_REQS_FULL_PATH="$VISOMASTER_ROOT_DIR/$TENSORRT_REQS_FILE"
 VENV_PATH="/opt/venv"
-# *** Using /logs ***
 LOG_DIR="/logs"
 LOG_FILE="$LOG_DIR/onstart_script.log"
+VNC_STARTUP_SCRIPT="/dockerstartup/vnc_startup_jupyterlab_filebrowser.sh" # Path to the VNC script copied by Dockerfile
 
 # Specific Inswapper Model Details
 INSWAPPER_URL="https://huggingface.co/Red1618/Viso/resolve/main/inswapper_128_fp16.onnx?download=true"
@@ -91,5 +90,24 @@ mv -f "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$TARGET_MODEL_DIR/$TARGET_
 if [ $? -ne 0 ]; then echo "ERROR: Failed to rename/overwrite inswapper model!" >&2; exit 1; fi
 echo "Inswapper model replaced successfully."
 
+# --- Start VNC Service ---
+echo "Attempting to start VNC service in the background..."
+if [ ! -f "$VNC_STARTUP_SCRIPT" ]; then
+    echo "ERROR: VNC startup script not found at $VNC_STARTUP_SCRIPT!" >&2
+    exit 1
+fi
+# Run the VNC startup script in the background using bash
+# The '--wait' might keep it attached in some way, but '&' detaches the process
+bash "$VNC_STARTUP_SCRIPT" --wait &
+VNC_PID=$! # Get the process ID of the background VNC script
+sleep 5 # Give it a few seconds to potentially start or fail
+# Check if the process is still running (basic check)
+if kill -0 $VNC_PID > /dev/null 2>&1; then
+    echo "VNC startup script process launched (PID: $VNC_PID). Check VNC connection."
+else
+    echo "WARNING: VNC startup script process (PID: $VNC_PID) does not seem to be running after launch attempt. Check logs."
+    # You might want to 'exit 1' here if VNC is critical
+fi
+
 echo "--- Provisioning Script Finished $(date) ---"
-# Container ENTRYPOINT will run next.
+# Vast.ai should now consider the On-Start complete. VNC runs in background.
