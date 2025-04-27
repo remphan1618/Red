@@ -94,7 +94,7 @@ RUN . $VENV_PATH/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
     # Repo is cloned by provisioning_script.sh
     # Install base requirements if any, plus scikit-image, jupyterlab, and tqdm
-    # *** Added tqdm here ***
+    # Add tqdm here as it's needed by the provisioning script's download step
     pip install --no-cache-dir scikit-image jupyterlab tqdm && \
     rm -rf /root/.cache/pip
 
@@ -108,6 +108,9 @@ RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | 
 # Run permission script last, ensure it exists in src/common/install or src/debian/install
 # Ensure set_user_permission.sh exists in one of the install dirs added above
 RUN $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR $HOME
+
+# *** ADDED: Copy the debug notebook into the root directory ***
+COPY ./src/debug_toolkit.ipynb /root/debug_toolkit.ipynb
 
 # Set default VNC resolution (can be overridden at runtime)
 ENV VNC_RESOLUTION=1280x1024
