@@ -6,7 +6,7 @@ ENV REFRESHED_AT 2024-08-12
 
 # == Environment Variables ==
 # Define static ENV vars early for better layer caching
-# *** Changed HOME to /workspace ***
+# *** Using /workspace ***
 ENV HOME=/workspace \
     TERM=xterm \
     STARTUPDIR=/dockerstartup \
@@ -24,9 +24,13 @@ ENV HOME=/workspace \
     # Add VENV to PATH
     PATH="/opt/venv/bin:$PATH"
 
-# Create and set working directory to /workspace
-RUN mkdir -p /workspace && chown root:root /workspace
+# Set working directory BEFORE creating it
+# *** Using /workspace ***
 WORKDIR /workspace
+
+# Create the working directory
+# *** Using /workspace ***
+RUN mkdir -p /workspace && chown root:root /workspace
 
 # == Expose Ports ==
 # Explicitly list ports instead of using ENV vars in EXPOSE
@@ -51,6 +55,8 @@ RUN mkdir -p /root/.ssh && \
     # Configure sshd_config
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && \
+    # Disable strict modes for potentially problematic home dir permissions
+    echo "StrictModes no" >> /etc/ssh/sshd_config && \
     # Ensure sshd directory exists
     mkdir -p /var/run/sshd
 
@@ -61,6 +67,7 @@ COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # == Add and Run Install Scripts ==
 # Add scripts from both common and debian install directories
+# *** Using /workspace ***
 RUN mkdir -p $INST_SCRIPTS
 # Use lowercase 'common'
 ADD ./src/common/install/ $INST_SCRIPTS/
@@ -80,7 +87,7 @@ RUN $INST_SCRIPTS/libnss_wrapper.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# *** Changed target from $HOME to /workspace ***
+# *** Using /workspace ***
 ADD ./src/debian/icewm/ /workspace/ # IceWM runtime config
 RUN mkdir -p $STARTUPDIR
 # Add Common helper scripts
@@ -88,7 +95,7 @@ RUN mkdir -p $STARTUPDIR
 ADD ./src/common/scripts $STARTUPDIR
 # Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-# *** Changed target from /root to /workspace ***
+# *** Using /workspace ***
 COPY ./src/provisioning_script.sh /workspace/provisioning_script.sh
 RUN chmod +x /workspace/provisioning_script.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
@@ -103,6 +110,7 @@ RUN . $VENV_PATH/bin/activate && \
     rm -rf /root/.cache/pip # Pip cache is still under /root usually
 
 # Set WORKDIR explicitly again just to be sure
+# *** Using /workspace ***
 WORKDIR /workspace
 
 # == Install File Browser ==
@@ -110,7 +118,7 @@ RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | 
 
 # == Final Setup & Permission Fixes ==
 # Run permission script if it exists and does other things
-# *** Changed target from $HOME to /workspace ***
+# *** Using /workspace ***
 RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /workspace; fi
 # *** Fix /root/.ssh ownership/permissions for SSH keys ***
 # *** Keep targeting /root/.ssh as that's where Vast.ai likely injects keys ***
@@ -121,7 +129,7 @@ RUN mkdir -p /root/.ssh && \
     touch /root/.ssh/authorized_keys && \
     chmod 600 /root/.ssh/authorized_keys
 
-# *** Changed target from /root to /workspace ***
+# *** Using /workspace ***
 COPY ./src/debug_toolkit.ipynb /workspace/debug_toolkit.ipynb
 
 # Set default VNC resolution (can be overridden at runtime)
