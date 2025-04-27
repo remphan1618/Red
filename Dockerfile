@@ -108,9 +108,6 @@ RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | 
 # Ensure set_user_permission.sh exists in one of the install dirs added above
 RUN $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR $HOME
 
-# *** ADDED: Create an alias for tailing the onstart log ***
-RUN echo "alias onstartlog='tail -f /root/onstart_script.log'" >> /root/.bashrc
-
 # Set default VNC resolution (can be overridden at runtime)
 ENV VNC_RESOLUTION=1280x1024
 
@@ -121,4 +118,3 @@ ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 # --- Notes ---
 # Remember to create a .dockerignore file.
 # Consider pinning versions.
-
