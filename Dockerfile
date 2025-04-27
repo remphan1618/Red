@@ -26,15 +26,13 @@ ENV HOME=/root \
 WORKDIR /
 
 # == Expose Ports ==
-# These are still useful for documentation and potential manual use
 EXPOSE 5901 6901 8888 22 8585
 
 # == Install System Dependencies ==
-# Removed 'supervisor' from the list
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget git build-essential software-properties-common apt-transport-https \
     ca-certificates unzip ffmpeg tzdata python3 python3-pip python3-venv \
-    openssh-server libegl1 libgl1-mesa-glx libglib2.0-0 \
+    openssh-server supervisor libegl1 libgl1-mesa-glx libglib2.0-0 \
     libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0 libqt5gui5 \
     libqt5core5a libqt5widgets5 libqt5x11extras5 pcmanfm \
     && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
@@ -45,17 +43,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Keep SSH config targeted at /root/.ssh
 RUN mkdir -p /root/.ssh && \
     chmod 700 /root/.ssh && \
-    # Configure sshd_config for root login with key, disable password, disable strict modes
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config && \
     echo "StrictModes no" >> /etc/ssh/sshd_config && \
-    # Ensure sshd run directory exists
     mkdir -p /var/run/sshd
 
-# == Configure Supervisor (REMOVED) ==
-# RUN mkdir -p /etc/supervisor/conf.d
-# COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-# Supervisor is no longer used
+# == Configure Supervisor ==
+RUN mkdir -p /etc/supervisor/conf.d
+COPY ./src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # == Add and Run Install Scripts ==
 # *** Using /install ***
@@ -67,22 +62,23 @@ RUN chmod 765 $INST_SCRIPTS/*
 # Run Installers from /install
 RUN $INST_SCRIPTS/tools.sh
 RUN $INST_SCRIPTS/install_custom_fonts.sh
-RUN $INST_SCRIPTS/tigervnc.sh # Keep VNC server install
-RUN $INST_SCRIPTS/no_vnc_1.5.0.sh # Keep noVNC install
-RUN $INST_SCRIPTS/icewm_ui.sh # Keep IceWM install
+RUN $INST_SCRIPTS/tigervnc.sh
+RUN $INST_SCRIPTS/no_vnc_1.5.0.sh
+RUN $INST_SCRIPTS/icewm_ui.sh
 RUN $INST_SCRIPTS/libnss_wrapper.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# *** Copy IceWM config to /etc/icewm for clarity ***
+# Copy IceWM config to /etc/icewm for clarity
 RUN mkdir -p /etc/icewm
 COPY ./src/debian/icewm/wm_startup.sh /etc/icewm/wm_startup.sh
 RUN chmod 755 /etc/icewm/wm_startup.sh
 
 RUN mkdir -p $STARTUPDIR
 ADD ./src/common/scripts $STARTUPDIR
-COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh # Keep for manual VNC start
-# *** Copy provisioning script to / ***
+# Keep for manual VNC start
+COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+# Copy provisioning script to /
 COPY ./src/provisioning_script.sh /provisioning_script.sh
 RUN chmod +x /provisioning_script.sh
 RUN chmod 765 /dockerstartup/vnc_startup.sh
@@ -102,7 +98,7 @@ WORKDIR /
 RUN wget -O - https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 
 # == Final Setup & Permission Fixes ==
-# Removed execution of set_user_permission.sh as it's likely not needed
+# REMOVED execution of set_user_permission.sh
 # RUN if [ -f $INST_SCRIPTS/set_user_permission.sh ]; then $INST_SCRIPTS/set_user_permission.sh $STARTUPDIR /VisoMaster; fi
 
 # Fix /root/.ssh permissions
@@ -112,17 +108,15 @@ RUN mkdir -p /root/.ssh && \
     touch /root/.ssh/authorized_keys && \
     chmod 600 /root/.ssh/authorized_keys
 
-# *** Copy debug notebook to / ***
+# Copy debug notebook to /
 COPY ./src/debug_toolkit.ipynb /debug_toolkit.ipynb
 
 # Set default VNC resolution
 ENV VNC_RESOLUTION=1280x1024
 
-# == Entrypoint (REMOVED) ==
-# ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-# Let Vast.ai handle startup based on launch flags (--jupyter, --ssh)
+# == Entrypoint ==
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # --- Notes ---
 # Remember to create a .dockerignore file.
 # Consider pinning versions.
-# VNC needs to be started manually via SSH if required.
