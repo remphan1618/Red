@@ -93,8 +93,9 @@ RUN python3 -m venv $VENV_PATH
 RUN . $VENV_PATH/bin/activate && \
     pip install --no-cache-dir --upgrade pip && \
     # Repo is cloned by provisioning_script.sh
-    # Install base requirements if any, plus scikit-image & jupyterlab
-    pip install --no-cache-dir scikit-image jupyterlab && \
+    # Install base requirements if any, plus scikit-image, jupyterlab, and tqdm
+    # *** Added tqdm here ***
+    pip install --no-cache-dir scikit-image jupyterlab tqdm && \
     rm -rf /root/.cache/pip
 
 # Set WORKDIR after installs if needed
@@ -114,10 +115,6 @@ ENV VNC_RESOLUTION=1280x1024
 # == Entrypoint ==
 # Use Supervisor to manage services
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
-
-# --- Notes ---
-# Remember to create a .dockerignore file.
-# Consider pinning versions.
 
 # --- Notes ---
 # Remember to create a .dockerignore file.
