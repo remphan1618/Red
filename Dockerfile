@@ -75,12 +75,10 @@ RUN $INST_SCRIPTS/libnss_wrapper.sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* || echo "No apt lists to clean"
 
 # == Add Runtime Configs and Scripts ==
-# Add IceWM runtime config
-ADD ./src/debian/icewm/ $HOME/
+ADD ./src/debian/icewm/ $HOME/ # IceWM runtime config
 RUN mkdir -p $STARTUPDIR
-# Add Common helper scripts
 # Use lowercase 'common'
-ADD ./src/common/scripts $STARTUPDIR
+ADD ./src/common/scripts $STARTUPDIR # Common helper scripts
 # Use lowercase 'src'
 COPY ./src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 # Use lowercase 'src'
