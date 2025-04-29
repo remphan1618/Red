@@ -1,5 +1,8 @@
 FROM nvidia/cuda:11.8.0-base-ubuntu20.04
 
+# Reset any entrypoint from the parent image to avoid "multiple entrypoints" warnings
+ENTRYPOINT []
+
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -61,5 +64,5 @@ echo "Startup complete - container running"\n\
 tail -f /dev/null\n\
 ' > /root/startup.sh && chmod +x /root/startup.sh
 
-# Set the startup command
+# Set the startup command - use CMD instead of ENTRYPOINT for flexibility
 CMD ["/bin/bash", "/root/startup.sh"]
