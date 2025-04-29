@@ -53,8 +53,13 @@ RUN mkdir -p /var/run/sshd \
     && sed -i 's/#UsePAM yes/UsePAM no/' /etc/ssh/sshd_config \
     && echo "PidFile /var/run/sshd/sshd.pid" >> /etc/ssh/sshd_config 
 
-# Create workspace directory and initial wm_startup.sh
+# Create workspace directory
 RUN mkdir -p /workspace
+
+# Copy window manager script to multiple locations to ensure it's found
+COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
+COPY src/debian/icewm/wm_startup.sh /root/wm_startup.sh
+RUN chmod +x /workspace/wm_startup.sh /root/wm_startup.sh
 
 # Set up TigerVNC configuration
 RUN printf '\n# docker-headless-vnc-container:\n$localhost = "no";\n1;\n' >>/etc/tigervnc/vncserver-config-defaults
@@ -72,13 +77,12 @@ RUN touch /root/.Xauthority && \
     echo 'touch ~/.Xauthority' >> /root/.bashrc && \
     echo 'xauth generate :1 . trusted' >> /root/.bashrc
 
-# Copy configuration files
-COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
+# Copy VNC startup script to dockerstartup
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN chmod +x /dockerstartup/vnc_startup.sh
 
-# Make scripts executable
-RUN chmod +x /workspace/wm_startup.sh /dockerstartup/vnc_startup.sh
+# Copy supervisord configuration
+COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy and activate provisioning script
 COPY src/provisioning_script.sh /tmp/provisioning_script.sh

@@ -59,17 +59,11 @@ cleanup () {
 }
 trap cleanup SIGINT SIGTERM
 
-## write correct window size to chrome properties
-# $STARTUPDIR/chrome-init.sh
-# source $HOME/.chromium-browser.init
-
-## resolve_vnc_connection
-VNC_IP=$(hostname -i)
-
 ## Initialize X11 authentication properly
 echo -e "\n------------------ setting up X11 authentication ------------------"
 mkdir -p "$HOME/.vnc"
 touch $HOME/.Xauthority
+chmod 600 $HOME/.Xauthority
 xauth generate :1 . trusted || echo "Failed to generate X11 authentication cookie"
 
 ## change vnc password - making it completely open
@@ -86,6 +80,26 @@ fi
 # Create an empty password file
 touch $PASSWD_PATH
 chmod 644 $PASSWD_PATH
+
+## Check and copy window manager startup script if needed
+if [ ! -f "$HOME/wm_startup.sh" ]; then
+    echo -e "\n------------------ copying window manager startup script ------------------"
+    if [ -f "/src/debian/icewm/wm_startup.sh" ]; then
+        cp /src/debian/icewm/wm_startup.sh $HOME/wm_startup.sh
+        chmod +x $HOME/wm_startup.sh
+        echo "Copied IceWM startup script from /src/debian/icewm/"
+    elif [ -f "/workspace/wm_startup.sh" ]; then
+        cp /workspace/wm_startup.sh $HOME/wm_startup.sh
+        chmod +x $HOME/wm_startup.sh
+        echo "Copied window manager startup script from /workspace/"
+    else
+        echo "#!/bin/bash
+export DISPLAY=:1
+exec icewm-session" > $HOME/wm_startup.sh
+        chmod +x $HOME/wm_startup.sh
+        echo "Created simple IceWM startup script"
+    fi
+fi
 
 ## start vncserver and noVNC webclient
 echo -e "\n------------------ start noVNC  ----------------------------"
@@ -130,6 +144,18 @@ if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
     # Create model_assets directory if it doesn't exist to prevent download errors
     mkdir -p /VisoMaster/model_assets
     mkdir -p /VisoMaster/models
+    
+    # Install missing libraries if VisoMaster failed before
+    if ! python -c "import PySide6" &>/dev/null; then
+        echo "Installing missing GUI dependencies..."
+        apt-get update && apt-get install -y --no-install-recommends \
+            libgl1-mesa-glx \
+            libegl1 \
+            libxkbcommon-x11-0 \
+            libglib2.0-0 \
+            libdbus-1-3
+        pip install PySide6 --upgrade
+    fi
     
     # Ensure models directory has content from model_assets (create symlink if needed)
     if [ ! -L "/VisoMaster/models" ] && [ -d "/VisoMaster/model_assets" ] && [ "$(ls -A /VisoMaster/model_assets 2>/dev/null)" ]; then
