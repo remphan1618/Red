@@ -31,16 +31,16 @@ Vast.ai provides several mechanisms to configure and initialize your cloud conta
 # This script clones the repo, activates venv, installs TensorRT, and downloads models.
 
 # Clone repo
-git clone "https://github.com/remphan1618/VisoMaster.git" "/root/VisoMaster"
+git clone "https://github.com/remphan1618/VisoMaster.git" "/VisoMaster"
 
 # Activate venv
 source /opt/venv/bin/activate
 
 # Install dependencies
-pip install -r "/root/VisoMaster/requirements_cu124.txt"
+pip install -r "/VisoMaster/requirements_cu124.txt"
 
 # Download models
-python "/root/VisoMaster/download_models.py"
+python "/VisoMaster/download_models.py"
 ```
 
 ---

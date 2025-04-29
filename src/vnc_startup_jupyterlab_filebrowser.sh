@@ -124,18 +124,44 @@ nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browse
 echo -e "Starting jupyterlab at port 8585..."
 nohup filebrowser -r /workspace -p 8585 -a 0.0.0.0 --noauth > /logs/filebrowser.log 2>&1 &
 
-# Modified to use correct path and handle errors
+# Modified to use consistent paths for VisoMaster
 echo -e "Looking for VisoMaster..."
 if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
+    # Create model_assets directory if it doesn't exist to prevent download errors
+    mkdir -p /VisoMaster/model_assets
+    mkdir -p /VisoMaster/models
+    
+    # Ensure models directory has content from model_assets (create symlink if needed)
+    if [ ! -L "/VisoMaster/models" ] && [ -d "/VisoMaster/model_assets" ] && [ "$(ls -A /VisoMaster/model_assets 2>/dev/null)" ]; then
+        echo "Creating symlinks from model_assets to models directory..."
+        find /VisoMaster/model_assets -type f -name "*.onnx" -exec ln -sf {} /VisoMaster/models/ \;
+    fi
+    
     echo -e "Starting VisoMaster..."
+    cd /VisoMaster  # Change to VisoMaster directory before starting
     python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
     echo -e "VisoMaster started in background with PID $!"
-elif [ -d "/$HOME/VisoMaster" ] && [ -f "/$HOME/VisoMaster/main.py" ]; then
-    echo -e "Starting VisoMaster from home directory..."
-    python /$HOME/VisoMaster/main.py > /logs/visomaster.log 2>&1 &
-    echo -e "VisoMaster started in background with PID $!"
 else
-    echo -e "VisoMaster not found. Skipping VisoMaster startup."
+    echo -e "VisoMaster not found at /VisoMaster. Looking in other locations..."
+    
+    # Check alternative paths (keeping for backward compatibility)
+    for visopath in "/workspace/VisoMaster" "/workspace/VisoMaster-main" "$HOME/VisoMaster"; do
+        if [ -d "$visopath" ] && [ -f "$visopath/main.py" ]; then
+            # Create model directories
+            mkdir -p $visopath/model_assets
+            mkdir -p $visopath/models
+            
+            echo -e "Starting VisoMaster from $visopath..."
+            cd $visopath  # Change to VisoMaster directory before starting
+            python $visopath/main.py > /logs/visomaster.log 2>&1 &
+            echo -e "VisoMaster started in background from $visopath with PID $!"
+            break
+        fi
+    done
+    
+    if [ ! -f "/logs/visomaster.log" ]; then
+        echo -e "VisoMaster not found in any standard location. Skipping VisoMaster startup."
+    fi
 fi
 
 if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then

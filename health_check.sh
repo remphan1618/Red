@@ -40,8 +40,10 @@ if [ -n \"\$PROVISIONING_SCRIPT\" ]; then\\
   curl -s -o /tmp/prov.sh \"\$PROVISIONING_SCRIPT\" || wget -q -O /tmp/prov.sh \"\$PROVISIONING_SCRIPT\"\\
   chmod +x /tmp/prov.sh && bash /tmp/prov.sh\\
 fi\\
-for s in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /root/provisioning_script.sh; do\\
-  if [ -f \"\$s\" ]; then echo \"Running: \$s\"; bash \"\$s\"; fi\\
+for s in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /VisoMaster/provisioning_script.sh; do\\
+    if [ -f \"$s\" ]; then\\
+        echo \"Found provisioning script at \$s\"\\
+    fi\\
 done\\
 \`\`\`" "$DOCS_FILE"
 
@@ -75,12 +77,12 @@ else
   STATUS_SRC="Not found"
 fi
 
-if [ -f "/root/provisioning_script.sh" ]; then 
+if [ -f "/VisoMaster/provisioning_script.sh" ]; then 
   if [ -f "/logs/root_provisioning.log" ]; then
     LAST_RUN=$(tail -n 1 /logs/root_provisioning.log | grep -o "completed" || echo "No completion record")
-    STATUS_ROOT="Present ($(wc -l /root/provisioning_script.sh | awk '{print $1}') lines) - Last run status: $LAST_RUN"
+    STATUS_ROOT="Present ($(wc -l /VisoMaster/provisioning_script.sh | awk '{print $1}') lines) - Last run status: $LAST_RUN"
   else
-    STATUS_ROOT="Present ($(wc -l /root/provisioning_script.sh | awk '{print $1}') lines) - No run log found"
+    STATUS_ROOT="Present ($(wc -l /VisoMaster/provisioning_script.sh | awk '{print $1}') lines) - No run log found"
   fi
 else 
   STATUS_ROOT="Not found"
@@ -90,7 +92,7 @@ sed -i "/### Provisioning Scripts Status/,/### Service Status Overview/c\\
 ### Provisioning Scripts Status\\
 - **/vast_ai_provisioning_script.sh**: $STATUS_VAST\\
 - **/src/provisioning_script.sh**: $STATUS_SRC\\
-- **/root/provisioning_script.sh**: $STATUS_ROOT\\
+- **/VisoMaster/provisioning_script.sh**: $STATUS_ROOT\\
 \\
 ### Service Status Overview\\
 \`\`\`\\
@@ -270,16 +272,15 @@ cat > "$WORKSPACE_DIR/view_ai_context.ipynb" << 'EOL'
    "outputs": [],
    "source": [
     "# Create wrapper for root/provisioning_script.sh\n",
-    "if os.path.exists(\"/root/provisioning_script.sh\"):\n",
-    "    with open(\"/root/provisioning_script_wrapper.sh\", \"w\") as f:\n",
-    "        f.write(\"\"\"#!/bin/bash\n",
-    "mkdir -p /logs\n",
-    "echo \\\"Starting root/provisioning_script.sh at $(date)\\\" > /logs/root_provisioning.log\n",
-    "bash /root/provisioning_script.sh 2>&1 | tee -a /logs/root_provisioning.log\n",
-    "echo \\\"root/provisioning_script.sh completed at $(date)\\\" >> /logs/root_provisioning.log\n",
-    "\"\"\")\n",
-    "    !chmod +x /root/provisioning_script_wrapper.sh\n",
-    "    print(\"✅ Created wrapper for /root/provisioning_script.sh\")"
+    "if os.path.exists(\"/VisoMaster/provisioning_script.sh\"):\n",
+    "    with open(\"/VisoMaster/provisioning_script_wrapper.sh\", \"w\") as f:\n",
+    "        f.write(\"#!/bin/bash\\n\")\n",
+    "        f.write(\"echo \\\"Running provisioning script...\\\"\\n\")\n",
+    "        f.write(\"cd /VisoMaster\\n\")\n",
+    "        f.write(\"bash /VisoMaster/provisioning_script.sh 2>&1 | tee -a /logs/provisioning.log\\n\")\n",
+    "        f.write(\"echo \\\"Provisioning script completed.\\\"\\n\")\n",
+    "    !chmod +x /VisoMaster/provisioning_script_wrapper.sh\n",
+    "    print(\"✅ Created wrapper for /VisoMaster/provisioning_script.sh\")"
    ]
   },
   {
@@ -304,7 +305,7 @@ cat > "$WORKSPACE_DIR/view_ai_context.ipynb" << 'EOL'
     "  curl -s -o /tmp/prov.sh \"$PROVISIONING_SCRIPT\" || wget -q -O /tmp/prov.sh \"$PROVISIONING_SCRIPT\"\n",
     "  chmod +x /tmp/prov.sh && bash /tmp/prov.sh\n",
     "fi\n",
-    "for s in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /root/provisioning_script.sh; do\n",
+    "for s in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /VisoMaster/provisioning_script.sh; do\n",
     "  if [ -f \"$s\" ]; then echo \"Running: $s\"; bash \"$s\"; fi\n",
     "done\n",
     "\"\"\")\n",
@@ -372,7 +373,7 @@ if [ -n "$PROVISIONING_SCRIPT" ]; then
 fi
 
 # Run each local provisioning script with separate logging
-for script_path in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /root/provisioning_script.sh; do
+for script_path in /vast_ai_provisioning_script.sh /src/provisioning_script.sh /VisoMaster/provisioning_script.sh; do
   if [ -f "$script_path" ]; then
     script_name=$(basename "$script_path" .sh)
     log_file="/logs/${script_name}.log"

@@ -21,10 +21,10 @@ A Vast.ai-specific feature allowing you to specify a shell script (hosted online
 **Example:**
 ```bash
 #!/bin/bash
-git clone "https://github.com/remphan1618/VisoMaster.git" "/root/VisoMaster"
+git clone "https://github.com/remphan1618/VisoMaster.git" "/VisoMaster"
 source /opt/venv/bin/activate
-pip install -r "/root/VisoMaster/requirements_cu124.txt"
-python "/root/VisoMaster/download_models.py"
+pip install -r "/VisoMaster/requirements_cu124.txt"
+python "/VisoMaster/download_models.py"
 ```
 
 ---

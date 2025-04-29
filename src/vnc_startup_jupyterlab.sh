@@ -115,10 +115,35 @@ $HOME/wm_startup.sh &> /logs/wm_startup.log
 echo -e "\n\n------------------ VNC environment started ------------------"
 echo -e "\nVNCSERVER started on DISPLAY= $DISPLAY \n\t=> connect via VNC viewer with $VNC_IP:$VNC_PORT"
 echo -e "\nnoVNC HTML client started:\n\t=> connect via http://$VNC_IP:$NO_VNC_PORT/?password=...\n"
+
+## Add VisoMaster detection and startup with proper directories
 echo -e "Starting jupyterlab at port 8080..."
 nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' > /logs/jupyter.log 2>&1 &
-echo -e "Starting Rope..."
-python /workspace/Rope/Rope.py > /logs/rope.log 2>&1 &
+
+# Add VisoMaster detection and directory preparation 
+echo -e "Looking for VisoMaster..."
+if [ -d "/VisoMaster" ]; then
+    # Create model_assets directory if it doesn't exist to prevent download errors
+    mkdir -p /VisoMaster/model_assets
+    mkdir -p /VisoMaster/models
+    
+    # Ensure models directory has content from model_assets
+    if [ -d "/VisoMaster/model_assets" ] && [ "$(ls -A /VisoMaster/model_assets 2>/dev/null)" ]; then
+        echo "Linking model files to models directory..."
+        find /VisoMaster/model_assets -type f -name "*.onnx" -exec ln -sf {} /VisoMaster/models/ \;
+    fi
+    
+    if [ -f "/VisoMaster/main.py" ]; then
+        echo -e "Starting VisoMaster from /VisoMaster..."
+        cd /VisoMaster  # Change to VisoMaster directory before starting
+        nohup python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+        echo -e "VisoMaster started in background with PID $!"
+    elif [ -f "/VisoMaster/download_models.py" ]; then
+        echo -e "Found VisoMaster download script. Ensuring models are downloaded..."
+        cd /VisoMaster
+        python /VisoMaster/download_models.py > /logs/model_download.log 2>&1
+    fi
+fi
 
 if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then
     echo -e "\n------------------ $HOME/.vnc/*$DISPLAY.log ------------------"

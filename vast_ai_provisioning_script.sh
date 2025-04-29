@@ -138,7 +138,23 @@ echo "✅ Python dependencies installed"
 section "Downloading models"
 if [ -f "/VisoMaster/download_models.py" ]; then
     echo "Running model downloader script..."
-    python "/VisoMaster/download_models.py" || handle_error "Failed to download models"
+    
+    # Create model_assets directory first to prevent download errors
+    mkdir -p "/VisoMaster/model_assets"
+    
+    # Change to the VisoMaster directory before running the script
+    # This ensures relative paths like './model_assets/' work correctly
+    cd /VisoMaster
+    
+    # Run the download script from within the VisoMaster directory
+    python "download_models.py" || handle_error "Failed to download models"
+    
+    # Create symbolic link for models directory if it doesn't exist
+    if [ ! -L "/VisoMaster/models" ]; then
+        ln -sf "/VisoMaster/model_assets" "/VisoMaster/models"
+        echo "Created symbolic link from model_assets to models directory"
+    fi
+    
     echo "✅ Models downloaded successfully"
 else
     echo "No model downloader script found. If you need to download models, please do so manually."
