@@ -47,7 +47,7 @@ RUN apt-get update && apt-get install -y \
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
 
 # Install Python dependencies for VisoMaster
-RUN python3.10 -m pip install tqdm PySide6 websockify
+RUN python3.10 -m pip install tqdm PySide6
 
 # Create necessary directories and files for VNC
 RUN mkdir -p /root/.vnc
