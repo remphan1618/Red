@@ -4,9 +4,6 @@
 # 
 # This script is designed to be used with the PROVISIONING_SCRIPT environment variable
 # in vast.ai. It performs first-boot initialization of the environment.
-#
-# Usage: Set PROVISIONING_SCRIPT=https://raw.githubusercontent.com/remphan1618/Red/main/vast_ai_provisioning_script.sh
-# in your vast.ai environment variables when creating an instance.
 
 # Set up logging
 LOG_DIR="/logs"
@@ -17,6 +14,9 @@ exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
 echo "==============================================="
 echo "Starting VisoMaster Provisioning: $(date)"
 echo "==============================================="
+
+# Force clean clone on startup
+FORCE_CLONE=true
 
 # Function to handle errors
 handle_error() {
@@ -34,40 +34,22 @@ section() {
     echo "==============================================="
 }
 
-# Install SSH server (which was missing and causing errors)
-section "Installing SSH server"
-if [ ! -f "/usr/sbin/sshd" ]; then
-    echo "OpenSSH server not found, installing..."
-    apt-get update && apt-get install -y openssh-server || handle_error "Failed to install SSH server"
-    echo "✅ SSH server installed"
-else
-    echo "✅ SSH server already installed"
-fi
-
-# Set up VNC configuration
+# Set up VNC configuration - CHECK DESTINATION FIRST, NOT SOURCE!
 section "Setting up VNC environment"
 mkdir -p /dockerstartup /root/.vnc
 
-# Check for VNC startup script - FIRST CHECK DESTINATION, then source
+# First check if the VNC startup script exists at the destination
 if [ -f "/dockerstartup/vnc_startup.sh" ]; then
-    echo "✅ VNC startup script already exists at /dockerstartup/vnc_startup.sh"
+    echo "✅ Using existing VNC startup script at /dockerstartup/vnc_startup.sh"
     chmod +x /dockerstartup/vnc_startup.sh
-elif [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
-    cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-    chmod +x /dockerstartup/vnc_startup.sh
-    echo "✅ Copied VNC filebrowser startup script to /dockerstartup/vnc_startup.sh"
-elif [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
-    cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh
-    chmod +x /dockerstartup/vnc_startup.sh
-    echo "✅ Copied VNC startup script to /dockerstartup/vnc_startup.sh"
 else
-    # Create a basic VNC startup script
     echo "Creating VNC startup script..."
+    # Create a simple VNC startup script
     cat > /dockerstartup/vnc_startup.sh << 'EOL'
 #!/bin/bash
-# VNC server startup script with TigerVNC
+# VNC server startup script for VisoMaster
 
-# Store the VNC password
+# Store VNC password
 mkdir -p ~/.vnc
 echo "vncpasswd123" | vncpasswd -f > ~/.vnc/passwd
 chmod 600 ~/.vnc/passwd
@@ -76,81 +58,55 @@ chmod 600 ~/.vnc/passwd
 export DISPLAY=:1
 
 # Start VNC server
-vncserver :1 -rfbport 5901 -geometry 1920x1080 -depth 24 -SecurityTypes None -localhost no &
-sleep 2
-
-echo "VNC Server started on port 5901"
+vncserver :1 -geometry 1920x1080 -depth 24 -localhost no
 
 # Start window manager
 if [ -f "/workspace/wm_startup.sh" ]; then
-    echo "Starting window manager with /workspace/wm_startup.sh"
     bash /workspace/wm_startup.sh &
-else
-    echo "Starting default window manager (openbox)"
-    openbox-session &
+elif command -v icewm-session >/dev/null; then
+    icewm-session &
+elif command -v openbox >/dev/null; then
+    openbox &
 fi
 
 # Keep the script running
+echo "VNC server started on display :1"
 tail -f /dev/null
 EOL
     chmod +x /dockerstartup/vnc_startup.sh
-    echo "✅ Created VNC startup script at /dockerstartup/vnc_startup.sh"
+    echo "✅ Created VNC startup script"
 fi
 
-# Check for window manager script - FIRST CHECK DESTINATION, then source
+# Create window manager startup script - CHECK DESTINATION FIRST!
 mkdir -p /workspace
 if [ -f "/workspace/wm_startup.sh" ]; then
-    echo "✅ Window manager startup script already exists at /workspace/wm_startup.sh"
+    echo "✅ Using existing window manager script at /workspace/wm_startup.sh"
     chmod +x /workspace/wm_startup.sh
-elif [ -f "/root/wm_startup.sh" ]; then
-    cp /root/wm_startup.sh /workspace/wm_startup.sh
-    chmod +x /workspace/wm_startup.sh
-    echo "✅ Copied window manager script from /root/ to /workspace/"
-elif [ -f "/src/debian/icewm/wm_startup.sh" ]; then
-    cp /src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
-    chmod +x /workspace/wm_startup.sh
-    echo "✅ Copied window manager startup script to /workspace/wm_startup.sh"
 else
-    # Create a window manager startup script
     echo "Creating window manager startup script..."
     cat > /workspace/wm_startup.sh << 'EOL'
 #!/bin/bash
-# Window manager startup script
+# Simple window manager startup script
 
+# Set display
 export DISPLAY=:1
-export XAUTHORITY=/root/.Xauthority
 
-# Wait for X server
-count=0
-while ! xdpyinfo -display :1 >/dev/null 2>&1; do
-    echo "Waiting for X server to be available on display :1... ($count/30)"
-    sleep 1
-    count=$((count+1))
-    if [ $count -gt 30 ]; then
-        echo "ERROR: X server is still not available after waiting"
-        break
-    fi
-done
-
-# Set X authentication
-xauth generate :1 . trusted 2>/dev/null || echo "Failed to generate X authentication"
+# Set up X authentication
+touch ~/.Xauthority
+xauth generate :1 . trusted
 
 # Start window manager
 if command -v icewm-session >/dev/null; then
-    echo "Starting IceWM session"
     icewm-session &
-elif command -v openbox-session >/dev/null; then
-    echo "Starting Openbox session"
-    openbox-session &
-else
-    echo "No window manager found"
+elif command -v openbox >/dev/null; then
+    openbox &
 fi
 
-# Keep the script running
-tail -f /dev/null
+# Done
+echo "Window manager started on display :1"
 EOL
     chmod +x /workspace/wm_startup.sh
-    echo "✅ Created window manager startup script at /workspace/wm_startup.sh"
+    echo "✅ Created window manager startup script"
 fi
 
 # Create VNC password
@@ -162,102 +118,75 @@ if [ ! -f "/root/.vnc/passwd" ] && command -v vncpasswd &> /dev/null; then
     echo "✅ VNC password created"
 fi
 
-# FORCE CLONE REPOSITORY SECTION - COMPLETELY REWRITTEN
+# FORCE CLONE REPOSITORY SECTION
 section "Cloning Repository"
-echo "FORCE CLONING VisoMaster repository..."
 
-# Backup important user data if repo exists
+# Always remove and re-clone the repository
 if [ -d "/VisoMaster" ]; then
-    echo "Backing up user data from existing directory..."
-    mkdir -p /tmp/backup_visomaster
-    
+    echo "Backing up important user files..."
+    mkdir -p /tmp/visomaster_backup
     for dir in "models" "Images" "Videos" "Output"; do
         if [ -d "/VisoMaster/$dir" ] && [ "$(ls -A "/VisoMaster/$dir" 2>/dev/null)" ]; then
-            echo "Backing up $dir directory..."
-            mkdir -p "/tmp/backup_visomaster/$dir"
-            cp -rf "/VisoMaster/$dir"/* "/tmp/backup_visomaster/$dir/" 2>/dev/null || echo "Warning: Some files could not be backed up"
+            mkdir -p "/tmp/visomaster_backup/$dir"
+            cp -r "/VisoMaster/$dir"/* "/tmp/visomaster_backup/$dir/" 2>/dev/null || echo "Warning: Could not backup all files in $dir"
         fi
     done
+    echo "✅ User data backed up"
     
-    # Delete existing repository
-    echo "Removing old repository directory..."
+    echo "Removing existing repository..."
     rm -rf /VisoMaster
 fi
 
-# Clone fresh repository
 echo "Cloning fresh repository..."
 git clone https://github.com/remphan1618/VisoMaster.git /VisoMaster || handle_error "Failed to clone repository"
 
-# Verify repository has main.py
+# Verify main.py exists
 if [ -f "/VisoMaster/main.py" ]; then
-    echo "✅ Repository cloned successfully with main.py present"
+    echo "✅ Repository cloned successfully with main.py found"
 else
-    echo "⚠️ Repository cloned but main.py is missing!"
-    
-    # Try to find main.py in subdirectories
-    MAIN_PY=$(find /VisoMaster -name "main.py" -type f 2>/dev/null)
-    if [ -n "$MAIN_PY" ]; then
-        echo "Found main.py at: $MAIN_PY"
-        ln -sf "$MAIN_PY" "/VisoMaster/main.py"
-        echo "✅ Created symlink to main.py in root directory"
-    else
-        echo "❌ main.py not found in repository. Creating placeholder file."
-        # Create a placeholder main.py that will keep running
-        cat > /VisoMaster/main.py << 'EOL'
+    echo "⚠️ main.py not found in repository. Creating placeholder..."
+    # Create a placeholder main.py
+    cat > /VisoMaster/main.py << 'EOL'
 #!/usr/bin/env python3
 print("VisoMaster placeholder script")
 print("The actual main.py was not found in the repository.")
-print("Please check the repository structure and update accordingly.")
+print("Please check the repository structure.")
+
+# Keep the script running
+import time
 while True:
-    import time
+    print("Placeholder script running...")
     time.sleep(60)
 EOL
-        chmod +x /VisoMaster/main.py
-    fi
+    chmod +x /VisoMaster/main.py
 fi
 
-# Restore backed up data if exists
-if [ -d "/tmp/backup_visomaster" ]; then
+# Restore user data
+if [ -d "/tmp/visomaster_backup" ]; then
     echo "Restoring user data..."
-    
-    # Create directories if they don't exist
     mkdir -p /VisoMaster/models /VisoMaster/Images /VisoMaster/Videos /VisoMaster/Output
-    
-    # Restore each directory
     for dir in "models" "Images" "Videos" "Output"; do
-        if [ -d "/tmp/backup_visomaster/$dir" ] && [ "$(ls -A "/tmp/backup_visomaster/$dir" 2>/dev/null)" ]; then
-            echo "Restoring $dir directory..."
-            cp -rf "/tmp/backup_visomaster/$dir"/* "/VisoMaster/$dir/" 2>/dev/null || echo "Warning: Some files could not be restored"
+        if [ -d "/tmp/visomaster_backup/$dir" ]; then
+            cp -r "/tmp/visomaster_backup/$dir"/* "/VisoMaster/$dir/" 2>/dev/null || echo "Warning: Could not restore all files in $dir"
         fi
     done
-    
-    # Cleanup
-    rm -rf /tmp/backup_visomaster
+    rm -rf /tmp/visomaster_backup
     echo "✅ User data restored"
 fi
 
-# Install Python dependencies directly (no virtual environment)
+# Install Python dependencies
 section "Installing Python dependencies"
-
-# Install requirements
 if [ -f "/VisoMaster/requirements_cu124.txt" ]; then
     echo "Installing CUDA 12.4 requirements..."
     pip install -r "/VisoMaster/requirements_cu124.txt" || handle_error "Failed to install requirements"
 elif [ -f "/VisoMaster/requirements.txt" ]; then
     echo "Installing requirements..."
     pip install -r "/VisoMaster/requirements.txt" || handle_error "Failed to install requirements"
-else
-    # Fallback to repository requirements
-    echo "Using repository requirements..."
-    pip install -r "requirements_124.txt" || pip install -r "requirements.txt" || handle_error "Failed to install requirements"
 fi
-echo "✅ Python dependencies installed"
 
-# Install additional tools and utilities
-section "Installing additional tools"
-apt-get update
-apt-get install -y rsync htop vim curl wget tmux || echo "Warning: Some utilities failed to install"
-echo "✅ Additional tools installed"
+# Always install critical packages
+pip install PySide6 jupyter jupyterlab numpy tqdm || handle_error "Failed to install critical packages"
+echo "✅ Python dependencies installed"
 
 # Set environment variables
 section "Setting environment variables"
@@ -269,7 +198,7 @@ export DISPLAY=":1"
 export XAUTHORITY="/root/.Xauthority"
 EOF
 
-# Add to .bashrc for immediate effect
+# Also add to .bashrc for immediate effect
 cat >> /root/.bashrc << EOF
 export VISOMASTER_HOME="/VisoMaster"
 export PATH="\$PATH:\$VISOMASTER_HOME/bin"
@@ -281,34 +210,17 @@ EOF
 source /etc/profile.d/VisoMaster_env.sh
 echo "✅ Environment variables set"
 
-# Ensure all files have the correct permissions
-section "Setting permissions"
-chown -R root:root /VisoMaster
-chmod -R 755 /VisoMaster
-echo "✅ Permissions set"
-
 # Set up X11 authentication
 section "Setting up X11 Authentication" 
 touch /root/.Xauthority
 chmod 600 /root/.Xauthority
-xauth generate :1 . trusted 2>/dev/null || echo "⚠️ Failed to generate X authentication"
 echo "✅ X11 authentication setup"
 
-# Setup supervisord config that properly handles all services
+# Update supervisord configuration
 section "Setting up Supervisor"
 mkdir -p /etc/supervisor/conf.d
 
-# Use existing supervisord config if in expected location
-if [ -f "/etc/supervisor/conf.d/supervisord.conf" ]; then
-    echo "Using existing supervisor configuration"
-# Or copy from /src location if it exists
-elif [ -f "/src/supervisord.conf" ]; then
-    cp /src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-    echo "✅ Copied supervisor configuration from /src/supervisord.conf"
-# Otherwise create a new one
-else
-    echo "Creating supervisor configuration..."
-    cat > /etc/supervisor/conf.d/supervisord.conf << 'EOL'
+cat > /etc/supervisor/conf.d/supervisord.conf << 'EOL'
 [supervisord]
 nodaemon=true
 user=root
@@ -384,46 +296,41 @@ stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
 user=root
 EOL
-    echo "✅ Created supervisor configuration"
-fi
 
-# Start supervisor
-if command -v supervisord &> /dev/null; then
-    echo "Supervisor is installed, checking if it's already running..."
-    if pgrep supervisord > /dev/null; then
-        echo "Supervisor is already running. Restarting..."
-        supervisorctl reload || echo "⚠️ Failed to reload supervisor"
+echo "✅ Supervisor configuration updated"
+
+# Restart supervisor to apply changes
+if pgrep supervisord > /dev/null; then
+    echo "Restarting supervisor..."
+    supervisorctl reload
+else
+    echo "Starting supervisor..."
+    supervisord -c /etc/supervisor/conf.d/supervisord.conf
+fi
+echo "✅ Supervisor restarted"
+
+# Create required directories
+section "Creating directories"
+mkdir -p /VisoMaster/{Images,Videos,Output,models} 
+echo "✅ Directories created"
+
+# Print repository contents for verification
+section "Repository verification"
+if [ -d "/VisoMaster" ]; then
+    echo "Contents of /VisoMaster:"
+    ls -la /VisoMaster/
+    if [ -f "/VisoMaster/main.py" ]; then
+        echo "✅ main.py is present"
     else
-        echo "Starting supervisor..."
-        supervisord -c /etc/supervisor/conf.d/supervisord.conf || echo "⚠️ Failed to start supervisor"
+        echo "❌ main.py is missing"
     fi
 else
-    echo "⚠️ Supervisor not installed. Installing..."
-    apt-get update && apt-get install -y supervisor || handle_error "Failed to install supervisor"
-    supervisord -c /etc/supervisor/conf.d/supervisord.conf || echo "⚠️ Failed to start supervisor"
-fi
-echo "✅ Supervisor configured and started"
-
-# Create necessary directories at the end
-section "Creating directories"
-mkdir -p /VisoMaster/{Images,Videos,Output,models} || handle_error "Failed to create directories"
-echo "✅ Directories created successfully at the end of provisioning"
-
-# Print repository contents for debugging
-section "Repository Contents"
-echo "Contents of /VisoMaster directory:"
-ls -la /VisoMaster/
-echo ""
-if [ -f "/VisoMaster/main.py" ]; then
-    echo "✅ main.py is present in repository root"
-else
-    echo "❌ main.py is missing from repository root!"
+    echo "❌ /VisoMaster directory is missing"
 fi
 
 # Script complete
 section "Provisioning complete"
 echo "VisoMaster environment has been successfully provisioned."
 echo "Completed at: $(date)"
-echo ""
 echo "Log file available at: $LOG_FILE"
 echo "==============================================="
