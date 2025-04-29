@@ -77,24 +77,6 @@ else
     echo "⚠️ requirements.txt not found" | tee -a $LOG_FILE
 fi
 
-# Download models
-section "Downloading models"
-if [ -f "$REPO_DIR/download_models.py" ]; then
-    echo "Running model downloader script..." | tee -a $LOG_FILE
-    cd "$REPO_DIR" && python download_models.py | tee -a $LOG_FILE
-    
-    if [ $? -eq 0 ]; then
-        echo "✅ Models downloaded successfully" | tee -a $LOG_FILE
-    else
-        echo "ERROR: Failed to download models" | tee -a $LOG_FILE
-        echo "See $LOG_FILE for details" | tee -a $LOG_FILE
-        echo "Continuing execution despite the error..." | tee -a $LOG_FILE
-        echo "✅ Models downloaded successfully" | tee -a $LOG_FILE
-    fi
-else
-    echo "⚠️ Model downloader script not found" | tee -a $LOG_FILE
-fi
-
 # Install additional tools
 section "Installing additional tools"
 apt-get update | tee -a $LOG_FILE
@@ -152,6 +134,8 @@ else
     echo "✅ Supervisor installed" | tee -a $LOG_FILE
     supervisord -c /etc/supervisor/conf.d/supervisord.conf | tee -a $LOG_FILE
 fi
+
+# Note: Model downloading is now done ONLY in vast_ai_provisioning_script.sh as the final step
 
 echo "===============================================" | tee -a $LOG_FILE
 echo "Provisioning completed successfully: $(date)" | tee -a $LOG_FILE
