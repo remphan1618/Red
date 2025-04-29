@@ -32,11 +32,14 @@ RUN apt-get update && apt-get install -y \
     tigervnc-standalone-server \
     tigervnc-common \
     websockify \
+    icewm \
+    xterm \
     git \
     wget \
     curl \
     supervisor \
     openssh-server \
+    net-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pip for Python 3.10
@@ -64,6 +67,26 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Set Python 3.10 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+
+# Install NoVNC
+RUN mkdir -p ${NO_VNC_HOME} && \
+    cd /tmp && \
+    wget -qO- https://github.com/novnc/noVNC/archive/v1.3.0.tar.gz | tar xz && \
+    cp -rf /tmp/noVNC-1.3.0/* ${NO_VNC_HOME}/ && \
+    rm -rf /tmp/noVNC-1.3.0 && \
+    cd ${NO_VNC_HOME}/utils && \
+    wget -qO- https://github.com/novnc/websockify/archive/v0.10.0.tar.gz | tar xz && \
+    mv websockify-0.10.0 websockify && \
+    ln -s ${NO_VNC_HOME}/utils/websockify/run ${NO_VNC_HOME}/utils/novnc_proxy && \
+    chmod +x ${NO_VNC_HOME}/utils/novnc_proxy
+
+# Install filebrowser for VNC filebrowser script
+RUN cd /tmp && \
+    curl -fsSL https://github.com/filebrowser/filebrowser/releases/download/v2.23.0/linux-amd64-filebrowser.tar.gz | tar -xz && \
+    mv filebrowser /usr/local/bin/ && \
+    chmod +x /usr/local/bin/filebrowser && \
+    mkdir -p /workspace && \
+    chmod 777 /workspace
 
 # Create directories for logs and supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d

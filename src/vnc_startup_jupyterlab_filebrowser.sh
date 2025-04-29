@@ -119,8 +119,18 @@ echo -e "Starting jupyterlab at port 8080..."
 nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' > /logs/jupyter.log 2>&1 &
 echo -e "Starting jupyterlab at port 8585..."
 nohup filebrowser -r /workspace -p 8585 -a 0.0.0.0 --noauth > /logs/filebrowser.log 2>&1 &
-echo -e "Starting VisoMaster..."
-python /$HOME/VisoMaster/main.py > /logs/visomaster.log 2>&1
+
+# Modified to use correct path and handle errors
+echo -e "Looking for VisoMaster..."
+if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
+    echo -e "Starting VisoMaster..."
+    python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+elif [ -d "/$HOME/VisoMaster" ] && [ -f "/$HOME/VisoMaster/main.py" ]; then
+    echo -e "Starting VisoMaster from home directory..."
+    python /$HOME/VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+else
+    echo -e "VisoMaster not found. Skipping VisoMaster startup."
+fi
 
 if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then
     echo -e "\n------------------ $HOME/.vnc/*$DISPLAY.log ------------------"
