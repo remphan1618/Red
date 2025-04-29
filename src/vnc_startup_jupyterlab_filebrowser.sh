@@ -1,6 +1,6 @@
 #!/bin/bash
-### every exit != 0 fails the script
-set -e
+### Modified to prevent immediate exits on errors
+set +e
 
 ## Create logs directory if it doesn't exist
 mkdir -p /logs
@@ -125,9 +125,11 @@ echo -e "Looking for VisoMaster..."
 if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
     echo -e "Starting VisoMaster..."
     python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+    echo -e "VisoMaster started in background with PID $!"
 elif [ -d "/$HOME/VisoMaster" ] && [ -f "/$HOME/VisoMaster/main.py" ]; then
     echo -e "Starting VisoMaster from home directory..."
     python /$HOME/VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+    echo -e "VisoMaster started in background with PID $!"
 else
     echo -e "VisoMaster not found. Skipping VisoMaster startup."
 fi
@@ -139,7 +141,11 @@ if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then
 fi
 
 if [ -z "$1" ] || [[ $1 =~ -w|--wait ]]; then
-    wait $PID_SUB
+    # Keep the script running indefinitely to prevent supervisor from restarting it
+    echo "Keeping VNC service alive..."
+    while true; do
+        sleep 60
+    done
 else
     # unknown option ==> call command
     echo -e "\n\n------------------ EXECUTE COMMAND ------------------"

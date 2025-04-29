@@ -15,8 +15,9 @@ ENV VNC_PW=vncpasswd123 \
     DISPLAY=:1 \
     NO_VNC_HOME=/usr/share/novnc
 
-# Create logs directory early with correct permissions
+# Create logs directory with proper permissions
 RUN mkdir -p /logs && chmod 777 /logs
+RUN mkdir -p /Logs && chmod 777 /Logs
 
 # Install required packages and add deadsnakes PPA for Python 3.10
 RUN apt-get update && apt-get install -y \
@@ -89,6 +90,10 @@ RUN cd /tmp && \
     chmod +x /usr/local/bin/filebrowser && \
     mkdir -p /workspace && \
     chmod 777 /workspace
+
+# Install Firefox for VNC environment
+COPY src/common/install/firefox.sh /tmp/firefox.sh
+RUN chmod +x /tmp/firefox.sh && /tmp/firefox.sh
 
 # Create directories for logs and supervisor configuration
 RUN mkdir -p /etc/supervisor/conf.d
