@@ -72,7 +72,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Set Python 3.10 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
-# Install NoVNC - using explicit path instead of environment variable
+# Install NoVNC directly using hard-coded paths instead of environment variables
 RUN mkdir -p /usr/share/novnc && \
     cd /tmp && \
     wget -qO- https://github.com/novnc/noVNC/archive/v1.3.0.tar.gz | tar xz && \
