@@ -93,7 +93,10 @@ RUN chmod +x /tmp/provisioning_script.sh
 COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
+# Reset any previous ENTRYPOINT and set our command
+ENTRYPOINT []
+# Use CMD instead of ENTRYPOINT to avoid multiple ENTRYPOINT warnings
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
 # Expose ports
 EXPOSE 22 5901 6901 8080 8585 8888
-# Set entrypoint to run supervisord directly
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
