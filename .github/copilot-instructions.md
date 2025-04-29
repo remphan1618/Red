@@ -1,0 +1,1 @@
+Never make a script always edit files in workspace
