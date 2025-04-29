@@ -44,8 +44,15 @@ if [ -f "/dockerstartup/vnc_startup.sh" ]; then
     chmod +x /dockerstartup/vnc_startup.sh
 else
     echo "Creating VNC startup script..."
-    # Create a simple VNC startup script
-    cat > /dockerstartup/vnc_startup.sh << 'EOL'
+    # Check if we have a custom VNC startup script in the src directory
+    if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
+        echo "Using custom VNC startup script from /src directory"
+        cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+        chmod +x /dockerstartup/vnc_startup.sh
+        echo "✅ Copied VNC startup script from /src directory"
+    else
+        # Create a simple VNC startup script
+        cat > /dockerstartup/vnc_startup.sh << 'EOL'
 #!/bin/bash
 # VNC server startup script for VisoMaster
 
@@ -58,7 +65,7 @@ chmod 600 ~/.vnc/passwd
 export DISPLAY=:1
 
 # Start VNC server
-vncserver :1 -geometry 1920x1080 -depth 24 -localhost no
+vncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE
 
 # Start window manager
 if [ -f "/workspace/wm_startup.sh" ]; then
@@ -73,8 +80,9 @@ fi
 echo "VNC server started on display :1"
 tail -f /dev/null
 EOL
-    chmod +x /dockerstartup/vnc_startup.sh
-    echo "✅ Created VNC startup script"
+        chmod +x /dockerstartup/vnc_startup.sh
+        echo "✅ Created VNC startup script"
+    fi
 fi
 
 # Create window manager startup script - CHECK DESTINATION FIRST!

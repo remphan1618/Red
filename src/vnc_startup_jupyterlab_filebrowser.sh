@@ -37,8 +37,11 @@ if [[ $1 =~ -h|--help ]]; then
     exit 0
 fi
 
-# should also source $STARTUPDIR/generate_container_user
-source $HOME/.bashrc
+# should also source $STARTUPDIR/generate_container_user if available
+if [ -f "$STARTUPDIR/generate_container_user" ]; then
+    source $STARTUPDIR/generate_container_user
+fi
+source $HOME/.bashrc 2>/dev/null || true
 
 # add `--skip` to startup args, to skip the VNC startup procedure
 if [[ $1 =~ -s|--skip ]]; then
@@ -103,9 +106,13 @@ fi
 
 ## start vncserver and noVNC webclient
 echo -e "\n------------------ start noVNC  ----------------------------"
-if [[ $DEBUG == true ]]; then echo "$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT"; fi
-$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT > /logs/no_vnc_startup.log 2>&1 &
-PID_SUB=$!
+if [ -d "$NO_VNC_HOME" ]; then
+    if [[ $DEBUG == true ]]; then echo "$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT"; fi
+    $NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT > /logs/no_vnc_startup.log 2>&1 &
+    PID_SUB=$!
+else
+    echo "noVNC directory not found at $NO_VNC_HOME"
+fi
 
 #echo -e "\n------------------ start VNC server ------------------------"
 #echo "remove old vnc locks to be a reattachable container"
@@ -133,61 +140,67 @@ $HOME/wm_startup.sh &> /logs/wm_startup.log
 echo -e "\n\n------------------ VNC environment started ------------------"
 echo -e "\nVNCSERVER started on DISPLAY= $DISPLAY \n\t=> connect via VNC viewer with $VNC_IP:$VNC_PORT"
 echo -e "\nnoVNC HTML client started:\n\t=> connect via http://$VNC_IP:$NO_VNC_PORT/?password=...\n"
-echo -e "Starting jupyterlab at port 8080..."
-nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' > /logs/jupyter.log 2>&1 &
-echo -e "Starting jupyterlab at port 8585..."
-nohup filebrowser -r /workspace -p 8585 -a 0.0.0.0 --noauth > /logs/filebrowser.log 2>&1 &
 
-# Modified to use consistent paths for VisoMaster
-echo -e "Looking for VisoMaster..."
-if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
-    # Create model_assets directory if it doesn't exist to prevent download errors
-    mkdir -p /VisoMaster/model_assets
-    mkdir -p /VisoMaster/models
-    
-    # Install missing libraries if VisoMaster failed before
-    if ! python -c "import PySide6" &>/dev/null; then
-        echo "Installing missing GUI dependencies..."
-        apt-get update && apt-get install -y --no-install-recommends \
-            libgl1-mesa-glx \
-            libegl1 \
-            libxkbcommon-x11-0 \
-            libglib2.0-0 \
-            libdbus-1-3
-        pip install PySide6 --upgrade
-    fi
-    
-    # Ensure models directory has content from model_assets (create symlink if needed)
-    if [ ! -L "/VisoMaster/models" ] && [ -d "/VisoMaster/model_assets" ] && [ "$(ls -A /VisoMaster/model_assets 2>/dev/null)" ]; then
-        echo "Creating symlinks from model_assets to models directory..."
-        find /VisoMaster/model_assets -type f -name "*.onnx" -exec ln -sf {} /VisoMaster/models/ \;
-    fi
-    
-    echo -e "Starting VisoMaster..."
-    cd /VisoMaster  # Change to VisoMaster directory before starting
-    python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
-    echo -e "VisoMaster started in background with PID $!"
-else
-    echo -e "VisoMaster not found at /VisoMaster. Looking in other locations..."
-    
-    # Check alternative paths (keeping for backward compatibility)
-    for visopath in "/workspace/VisoMaster" "/workspace/VisoMaster-main" "$HOME/VisoMaster"; do
-        if [ -d "$visopath" ] && [ -f "$visopath/main.py" ]; then
-            # Create model directories
-            mkdir -p $visopath/model_assets
-            mkdir -p $visopath/models
-            
-            echo -e "Starting VisoMaster from $visopath..."
-            cd $visopath  # Change to VisoMaster directory before starting
-            python $visopath/main.py > /logs/visomaster.log 2>&1 &
-            echo -e "VisoMaster started in background from $visopath with PID $!"
-            break
+# If we're running under supervisor, don't start these services as supervisor will handle them
+if [[ -z "$SUPERVISOR_ENABLED" ]]; then
+    echo -e "Starting jupyterlab at port 8080..."
+    nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' > /logs/jupyter.log 2>&1 &
+    echo -e "Starting jupyterlab at port 8585..."
+    nohup filebrowser -r /workspace -p 8585 -a 0.0.0.0 --noauth > /logs/filebrowser.log 2>&1 &
+
+    # Modified to use consistent paths for VisoMaster
+    echo -e "Looking for VisoMaster..."
+    if [ -d "/VisoMaster" ] && [ -f "/VisoMaster/main.py" ]; then
+        # Create model_assets directory if it doesn't exist to prevent download errors
+        mkdir -p /VisoMaster/model_assets
+        mkdir -p /VisoMaster/models
+        
+        # Install missing libraries if VisoMaster failed before
+        if ! python -c "import PySide6" &>/dev/null; then
+            echo "Installing missing GUI dependencies..."
+            apt-get update && apt-get install -y --no-install-recommends \
+                libgl1-mesa-glx \
+                libegl1 \
+                libxkbcommon-x11-0 \
+                libglib2.0-0 \
+                libdbus-1-3
+            pip install PySide6 --upgrade
         fi
-    done
-    
-    if [ ! -f "/logs/visomaster.log" ]; then
-        echo -e "VisoMaster not found in any standard location. Skipping VisoMaster startup."
+        
+        # Ensure models directory has content from model_assets (create symlink if needed)
+        if [ ! -L "/VisoMaster/models" ] && [ -d "/VisoMaster/model_assets" ] && [ "$(ls -A /VisoMaster/model_assets 2>/dev/null)" ]; then
+            echo "Creating symlinks from model_assets to models directory..."
+            find /VisoMaster/model_assets -type f -name "*.onnx" -exec ln -sf {} /VisoMaster/models/ \;
+        fi
+        
+        echo -e "Starting VisoMaster..."
+        cd /VisoMaster  # Change to VisoMaster directory before starting
+        python /VisoMaster/main.py > /logs/visomaster.log 2>&1 &
+        echo -e "VisoMaster started in background with PID $!"
+    else
+        echo -e "VisoMaster not found at /VisoMaster. Looking in other locations..."
+        
+        # Check alternative paths (keeping for backward compatibility)
+        for visopath in "/workspace/VisoMaster" "/workspace/VisoMaster-main" "$HOME/VisoMaster"; do
+            if [ -d "$visopath" ] && [ -f "$visopath/main.py" ]; then
+                # Create model directories
+                mkdir -p $visopath/model_assets
+                mkdir -p $visopath/models
+                
+                echo -e "Starting VisoMaster from $visopath..."
+                cd $visopath  # Change to VisoMaster directory before starting
+                python $visopath/main.py > /logs/visomaster.log 2>&1 &
+                echo -e "VisoMaster started in background from $visopath with PID $!"
+                break
+            fi
+        done
+        
+        if [ ! -f "/logs/visomaster.log" ]; then
+            echo -e "VisoMaster not found in any standard location. Skipping VisoMaster startup."
+        fi
     fi
+else
+    echo "Running under supervisor, skipping application startup (supervisor will handle it)"
 fi
 
 if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then
