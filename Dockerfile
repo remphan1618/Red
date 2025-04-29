@@ -68,17 +68,19 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Set Python 3.10 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
-# Install NoVNC
-RUN mkdir -p ${NO_VNC_HOME} && \
+# Install NoVNC - using explicit path instead of environment variable
+RUN mkdir -p /usr/share/novnc && \
     cd /tmp && \
     wget -qO- https://github.com/novnc/noVNC/archive/v1.3.0.tar.gz | tar xz && \
-    cp -rf /tmp/noVNC-1.3.0/* ${NO_VNC_HOME}/ && \
+    cp -rf /tmp/noVNC-1.3.0/* /usr/share/novnc/ && \
     rm -rf /tmp/noVNC-1.3.0 && \
-    cd ${NO_VNC_HOME}/utils && \
+    mkdir -p /usr/share/novnc/utils/websockify && \
+    cd /usr/share/novnc/utils && \
     wget -qO- https://github.com/novnc/websockify/archive/v0.10.0.tar.gz | tar xz && \
-    mv websockify-0.10.0 websockify && \
-    ln -s ${NO_VNC_HOME}/utils/websockify/run ${NO_VNC_HOME}/utils/novnc_proxy && \
-    chmod +x ${NO_VNC_HOME}/utils/novnc_proxy
+    cp -rf websockify-0.10.0/* websockify/ && \
+    rm -rf websockify-0.10.0 && \
+    ln -sf /usr/share/novnc/utils/websockify/run /usr/share/novnc/utils/novnc_proxy && \
+    chmod +x /usr/share/novnc/utils/novnc_proxy
 
 # Install filebrowser for VNC filebrowser script
 RUN cd /tmp && \
