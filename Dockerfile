@@ -46,14 +46,8 @@ RUN apt-get update && apt-get install -y \
 # Install pip for Python 3.10
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
 
-# Install python websockify properly
-RUN python3.10 -m pip install websockify
-
-# Install tqdm for model downloading
-RUN python3.10 -m pip install tqdm
-
-# Install PySide6 for VisoMaster UI
-RUN python3.10 -m pip install PySide6
+# Install Python dependencies for VisoMaster
+RUN python3.10 -m pip install tqdm PySide6 websockify
 
 # Create necessary directories and files for VNC
 RUN mkdir -p /root/.vnc
@@ -68,7 +62,7 @@ RUN touch /root/.Xauthority
 # Set up Python virtual environment with Python 3.10
 RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-
+    
 # Set Python 3.10 as the default python3
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
