@@ -66,6 +66,12 @@ trap cleanup SIGINT SIGTERM
 ## resolve_vnc_connection
 VNC_IP=$(hostname -i)
 
+## Initialize X11 authentication properly
+echo -e "\n------------------ setting up X11 authentication ------------------"
+mkdir -p "$HOME/.vnc"
+touch $HOME/.Xauthority
+xauth generate :1 . trusted || echo "Failed to generate X11 authentication cookie"
+
 ## change vnc password - making it completely open
 echo -e "\n------------------ disabling VNC password ------------------"
 # Set VNC to no security mode
@@ -100,6 +106,11 @@ vnc_cmd="vncserver $DISPLAY -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -loc
 
 if [[ $DEBUG == true ]]; then echo "$vnc_cmd"; fi
 $vnc_cmd > /logs/no_vnc_startup.log 2>&1
+
+# Disable X access control to fix window manager connection issues
+export DISPLAY=:1
+xhost + || echo "Failed to disable X access control"
+xhost +localhost || echo "Failed to add localhost to X access control"
 
 echo -e "start window manager\n..."
 $HOME/wm_startup.sh &> /logs/wm_startup.log

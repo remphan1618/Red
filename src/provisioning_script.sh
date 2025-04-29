@@ -1,175 +1,158 @@
 #!/bin/bash
-# This script clones the repo into /VisoMaster, activates venv, installs TensorRT, downloads models,
-# overwrites the inswapper model, creates output directories, AND STARTS VNC. Logs go to /logs.
-# Run via Vast.ai On-Start: bash /provisioning_script.sh
+# VNC provisioning script for VisoMaster
+# This script will be run by the provisioning system to prepare the environment
 
-# --- Define Paths and Variables ---
-PROJECT_PARENT_DIR="/"
-VISOMASTER_REPO_NAME="VisoMaster"
-VISOMASTER_ROOT_DIR="$PROJECT_PARENT_DIR$VISOMASTER_REPO_NAME" # Results in /VisoMaster
-VISOMASTER_REPO_URL="https://github.com/remphan1618/VisoMaster.git"
-MODEL_DOWNLOAD_SCRIPT_NAME="download_models.py"
-MODEL_DOWNLOAD_SCRIPT_FULL_PATH="$VISOMASTER_ROOT_DIR/$MODEL_DOWNLOAD_SCRIPT_NAME"
-TENSORRT_REQS_FILE="requirements_cu124.txt" # Assuming this file exists in the repo
-TENSORRT_REQS_FULL_PATH="$VISOMASTER_ROOT_DIR/$TENSORRT_REQS_FILE"
-VENV_PATH="/opt/venv"
-LOG_DIR="/logs"
-LOG_FILE="$LOG_DIR/onstart_script.log"
-# *** CORRECTED VNC SCRIPT PATH ***
-VNC_STARTUP_SCRIPT="/dockerstartup/vnc_startup.sh" # Path where Dockerfile copies the script
+echo "==============================================="
+echo "Starting VisoMaster Provisioning: $(date)"
+echo "==============================================="
 
-# Specific Inswapper Model Details
-INSWAPPER_URL="https://huggingface.co/Red1618/Viso/resolve/main/inswapper_128_fp16.onnx?download=true"
-DOWNLOADED_INSWAPPER_NAME="inswapper_128_fp16.onnx.download"
-TARGET_MODEL_DIR="$VISOMASTER_ROOT_DIR/models"
-TARGET_INSWAPPER_NAME="inswapper_128_fp16.onnx"
+LOG_FILE="/logs/provisioning_script.log"
+mkdir -p /logs
 
-# Directories to create
-IMAGES_DIR="$VISOMASTER_ROOT_DIR/Images"
-VIDEOS_DIR="$VISOMASTER_ROOT_DIR/Videos"
-OUTPUT_DIR="$VISOMASTER_ROOT_DIR/Output"
-
-
-# --- Setup Logging & Execution ---
-mkdir -p "$LOG_DIR" # Create log directory first
-exec > >(tee -a "$LOG_FILE") 2> >(tee -a "$LOG_FILE" >&2)
-echo "--- Starting Provisioning Script $(date) ---"
-echo "--- Logging to $LOG_FILE ---"
-set -eu # Changed from 'set -eux' to not exit on errors
-
-# --- Clone VisoMaster Repository ---
-if [ ! -d "$VISOMASTER_ROOT_DIR/.git" ]; then
-  echo "Checking VisoMaster directory..."
-  if [ -d "$VISOMASTER_ROOT_DIR" ] && [ "$(ls -A $VISOMASTER_ROOT_DIR)" ]; then
-    echo "Directory $VISOMASTER_ROOT_DIR already exists and has content, skipping clone."
-    echo "Using existing VisoMaster directory."
-  else
-    echo "Cloning VisoMaster into $VISOMASTER_ROOT_DIR..."
-    git clone "$VISOMASTER_REPO_URL" "$VISOMASTER_ROOT_DIR" || { 
-      echo "ERROR: Failed to clone repository. Continuing execution..." >&2
-    }
-  fi
-else
-  echo "Directory $VISOMASTER_ROOT_DIR already contains a git repository, updating..."
-  cd "$VISOMASTER_ROOT_DIR"
-  git pull || echo "ERROR: Failed to update repository. Continuing execution..." >&2
-fi
-
-# --- Create Required Directories ---
-echo "Creating required directories inside $VISOMASTER_ROOT_DIR..."
-mkdir -p "$IMAGES_DIR" || { echo "ERROR: Failed to create $IMAGES_DIR" >&2; }
-mkdir -p "$VIDEOS_DIR" || { echo "ERROR: Failed to create $VIDEOS_DIR" >&2; }
-mkdir -p "$OUTPUT_DIR" || { echo "ERROR: Failed to create $OUTPUT_DIR" >&2; }
-mkdir -p "$TARGET_MODEL_DIR" || { echo "ERROR: Failed to create $TARGET_MODEL_DIR" >&2; }
-echo "Directories created: Images, Videos, Output, models."
-
-# --- Activate Python Virtual Environment ---
-echo "Activating venv..."
-if [ ! -f "$VENV_PATH/bin/activate" ]; then 
-  echo "WARNING: Venv activate script not found at $VENV_PATH/bin/activate!" >&2
-  echo "Continuing without virtual environment"
-else
-  source "$VENV_PATH/bin/activate"
-  echo "Python: $(which python)"
-fi
-
-# --- Install TensorRT ---
-echo "Installing TensorRT..."
-if [ ! -f "$TENSORRT_REQS_FULL_PATH" ]; then 
-  echo "WARNING: TensorRT reqs file ($TENSORRT_REQS_FILE) not found in repo!" >&2
-  echo "Checking alternative locations for requirements files..."
-  if [ -f "/requirements_124.txt" ]; then
-    echo "Using /requirements_124.txt instead..."
-    pip install -r "/requirements_124.txt" --no-cache-dir || echo "WARNING: Failed to install TensorRT. Continuing execution..." >&2
-  else
-    echo "WARNING: Could not find any requirements file. Skipping TensorRT installation."
-  fi
-else
-  pip install -r "$TENSORRT_REQS_FULL_PATH" --no-cache-dir || echo "WARNING: Failed to install TensorRT. Continuing execution..." >&2
-fi
-echo "TensorRT install attempt finished."
-
-# --- Install tqdm ---
-echo "Installing tqdm..."
-pip install tqdm --no-cache-dir || echo "WARNING: Failed to install tqdm. Continuing execution..." >&2
-echo "tqdm install attempt finished."
-
-# --- Download VisoMaster Models ---
-if [ -f "$MODEL_DOWNLOAD_SCRIPT_FULL_PATH" ]; then
-  echo "Downloading models..."
-  cd "$VISOMASTER_ROOT_DIR" || { 
-    echo "ERROR: Failed to cd to $VISOMASTER_ROOT_DIR!" >&2
-    echo "Skipping model download." 
-  }
-  
-  if [ -f "$MODEL_DOWNLOAD_SCRIPT_NAME" ]; then
-    echo "Executing $MODEL_DOWNLOAD_SCRIPT_FULL_PATH from $(pwd)..."
-    python "$MODEL_DOWNLOAD_SCRIPT_FULL_PATH" || echo "WARNING: download_models.py failed! Continuing execution..." >&2
-    echo "Model download attempt finished."
-  else
-    echo "WARNING: $MODEL_DOWNLOAD_SCRIPT_NAME not found in current directory $(pwd). Skipping model download."
-  fi
-else
-  echo "WARNING: Model download script ($MODEL_DOWNLOAD_SCRIPT_FULL_PATH) not found. Skipping model download."
-fi
-
-# --- Download and Overwrite Specific Inswapper Model ---
-echo "Downloading specific inswapper model from $INSWAPPER_URL..."
-wget -O "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$INSWAPPER_URL" || {
-  echo "ERROR: Failed to download inswapper model!" >&2
-  echo "Continuing execution..." 
+# Function to log section headers
+section() {
+    echo -e "\n===============================================" | tee -a $LOG_FILE
+    echo "SECTION: $1 - $(date)" | tee -a $LOG_FILE
+    echo "===============================================" | tee -a $LOG_FILE
 }
 
-if [ -f "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" ]; then
-  echo "Renaming/Overwriting $DOWNLOADED_INSWAPPER_NAME to $TARGET_INSWAPPER_NAME in $TARGET_MODEL_DIR..."
-  mv -f "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$TARGET_MODEL_DIR/$TARGET_INSWAPPER_NAME" || {
-    echo "ERROR: Failed to rename/overwrite inswapper model!" >&2
-    echo "Continuing execution..." 
-  }
-  echo "Inswapper model operation finished."
+# Install SSH server
+section "Installing SSH server"
+if dpkg -l | grep -q openssh-server; then
+    echo "✅ SSH server already installed" | tee -a $LOG_FILE
 else
-  echo "WARNING: Downloaded inswapper model not found, skipping rename operation."
+    apt-get update && apt-get install -y openssh-server | tee -a $LOG_FILE
+    echo "✅ SSH server installed" | tee -a $LOG_FILE
 fi
 
-# --- Check if supervisor is running before starting VNC manually ---
-if pgrep supervisord > /dev/null; then
-    echo "Supervisor is running. Skipping manual VNC startup as it should be managed by supervisor."
+# Set up VNC environment
+section "Setting up VNC environment"
+if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
+    mkdir -p /dockerstartup
+    cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+    chmod +x /dockerstartup/vnc_startup.sh
+    echo "✅ Copied VNC filebrowser startup script to /dockerstartup/vnc_startup.sh" | tee -a $LOG_FILE
 else
-    # --- Start VNC Service only if supervisor isn't running ---
-    echo "Supervisor not detected. Attempting to start VNC service manually in the background..."
-    # *** Check for the CORRECT path ***
-    if [ ! -f "$VNC_STARTUP_SCRIPT" ]; then
-        echo "WARNING: VNC startup script not found at $VNC_STARTUP_SCRIPT!" >&2
-        echo "Checking alternative locations..."
-        
-        # Try to find the script in other locations
-        for alt_path in "/src/vnc_startup_jupyterlab.sh" "/vnc_startup.sh"; do
-            if [ -f "$alt_path" ]; then
-                echo "Found alternative VNC script at $alt_path"
-                # Copy to expected location
-                cp "$alt_path" "$VNC_STARTUP_SCRIPT"
-                chmod +x "$VNC_STARTUP_SCRIPT"
-                break
-            fi
-        done
+    echo "⚠️ VNC startup script not found" | tee -a $LOG_FILE
+fi
+
+# Clone or update repository
+section "Cloning/Updating repository"
+REPO_DIR="/VisoMaster"
+GIT_URL="https://github.com/BrianP8701/VisoMaster.git"
+
+if [ -d "$REPO_DIR" ] && [ -d "$REPO_DIR/.git" ]; then
+    echo "Repository already exists, updating..." | tee -a $LOG_FILE
+    cd "$REPO_DIR"
+    git pull | tee -a $LOG_FILE
+    echo "✅ Repository updated" | tee -a $LOG_FILE
+else
+    echo "Attempting to clone VisoMaster repository..." | tee -a $LOG_FILE
+    git clone "$GIT_URL" "$REPO_DIR" | tee -a $LOG_FILE
+    echo "✅ Repository cloned successfully" | tee -a $LOG_FILE
+fi
+
+# Install Python dependencies
+section "Installing Python dependencies"
+if [ -f "$REPO_DIR/requirements.txt" ]; then
+    source /opt/venv/bin/activate
+    echo "Virtual environment activated" | tee -a $LOG_FILE
+
+    # Install CUDA requirements
+    if [ -f "/requirements_124.txt" ]; then
+        echo "Installing CUDA 12.4 requirements..." | tee -a $LOG_FILE
+        pip install -r /requirements_124.txt | tee -a $LOG_FILE
     fi
+
+    # Install main requirements
+    echo "Installing project requirements..." | tee -a $LOG_FILE
+    pip install -r "$REPO_DIR/requirements.txt" | tee -a $LOG_FILE
     
-    # Try to start VNC if we have a script
-    if [ -f "$VNC_STARTUP_SCRIPT" ]; then
-        # Run the VNC startup script in the background using bash
-        bash "$VNC_STARTUP_SCRIPT" --wait &
-        VNC_PID=$! # Get the process ID of the background VNC script
-        sleep 5 # Give it a few seconds to potentially start or fail
-        # Check if the process is still running (basic check)
-        if kill -0 $VNC_PID > /dev/null 2>&1; then
-            echo "VNC startup script process launched (PID: $VNC_PID). Check VNC connection."
-        else
-            echo "WARNING: VNC startup script process (PID: $VNC_PID) does not seem to be running after launch attempt. Check logs."
-        fi
-    else
-        echo "WARNING: Could not find VNC startup script. VNC will not be started manually."
-    fi
+    # Install critical missing packages - ensure these are always installed
+    echo "Installing essential packages..." | tee -a $LOG_FILE
+    pip install tqdm PySide6 | tee -a $LOG_FILE
+    
+    echo "✅ Python dependencies installed" | tee -a $LOG_FILE
+else
+    echo "⚠️ requirements.txt not found" | tee -a $LOG_FILE
 fi
 
-echo "--- Provisioning Script Finished $(date) ---"
-# Vast.ai should now consider the On-Start complete.
+# Download models
+section "Downloading models"
+if [ -f "$REPO_DIR/download_models.py" ]; then
+    echo "Running model downloader script..." | tee -a $LOG_FILE
+    cd "$REPO_DIR" && python download_models.py | tee -a $LOG_FILE
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ Models downloaded successfully" | tee -a $LOG_FILE
+    else
+        echo "ERROR: Failed to download models" | tee -a $LOG_FILE
+        echo "See $LOG_FILE for details" | tee -a $LOG_FILE
+        echo "Continuing execution despite the error..." | tee -a $LOG_FILE
+        echo "✅ Models downloaded successfully" | tee -a $LOG_FILE
+    fi
+else
+    echo "⚠️ Model downloader script not found" | tee -a $LOG_FILE
+fi
+
+# Install additional tools
+section "Installing additional tools"
+apt-get update | tee -a $LOG_FILE
+apt-get install -y vim htop wget curl rsync tmux | tee -a $LOG_FILE
+echo "✅ Additional tools installed" | tee -a $LOG_FILE
+
+# Set environment variables
+section "Setting environment variables"
+{
+    echo 'export PYTHONPATH="$PYTHONPATH:/VisoMaster"'
+    echo 'export PATH="$PATH:/VisoMaster/bin"'
+} >> /etc/profile.d/visomaster.sh
+
+# Also add to .bashrc for non-login shells
+{
+    echo 'export PYTHONPATH="$PYTHONPATH:/VisoMaster"'
+    echo 'export PATH="$PATH:/VisoMaster/bin"'
+} >> /root/.bashrc
+
+echo "✅ Environment variables set" | tee -a $LOG_FILE
+
+# Set permissions
+section "Setting permissions"
+chmod -R 755 "$REPO_DIR" 2>/dev/null || true
+echo "✅ Permissions set" | tee -a $LOG_FILE
+
+# Start supervisor
+section "Starting supervisor"
+if command -v supervisord &> /dev/null; then
+    echo "Supervisor is installed, checking if it's already running..." | tee -a $LOG_FILE
+    if ! pgrep -x "supervisord" > /dev/null; then
+        echo "Starting supervisor..." | tee -a $LOG_FILE
+        
+        # Copy VNC startup script
+        if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
+            mkdir -p /dockerstartup
+            cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+            chmod +x /dockerstartup/vnc_startup.sh
+            echo "✅ VNC script copied successfully" | tee -a $LOG_FILE
+        fi
+        
+        # Set up SSH properly
+        mkdir -p /var/run/sshd || true
+        echo "Setting up SSH properly..." | tee -a $LOG_FILE
+        echo "✅ SSH configuration fixed" | tee -a $LOG_FILE
+        
+        # Start supervisor
+        supervisord -c /etc/supervisor/conf.d/supervisord.conf | tee -a $LOG_FILE
+    else
+        echo "✅ Supervisor is already running" | tee -a $LOG_FILE
+    fi
+else
+    echo "⚠️ Supervisor is not installed" | tee -a $LOG_FILE
+    apt-get update && apt-get install -y supervisor | tee -a $LOG_FILE
+    echo "✅ Supervisor installed" | tee -a $LOG_FILE
+    supervisord -c /etc/supervisor/conf.d/supervisord.conf | tee -a $LOG_FILE
+fi
+
+echo "===============================================" | tee -a $LOG_FILE
+echo "Provisioning completed successfully: $(date)" | tee -a $LOG_FILE
+echo "===============================================" | tee -a $LOG_FILE

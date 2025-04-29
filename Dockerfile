@@ -30,11 +30,13 @@ RUN apt-get update && apt-get install -y \
     python3.10-distutils \
     python3-pip \
     xauth \
+    x11-xserver-utils \
+    xdpyinfo \
+    xterm \
     tigervnc-standalone-server \
     tigervnc-common \
     websockify \
     icewm \
-    xterm \
     git \
     wget \
     curl \
