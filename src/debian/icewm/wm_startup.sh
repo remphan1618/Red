@@ -8,8 +8,17 @@ echo -e "\n------------------ startup of IceWM window manager ------------------
 export DISPLAY=:1
 export XAUTHORITY=/root/.Xauthority
 
+# Ensure .Xauthority exists and set permissions
+touch $HOME/.Xauthority
+chmod 600 $HOME/.Xauthority
+
+# Create proper X11 authentication - use multiple approaches to ensure it works
+xauth generate :1 . trusted 2>/dev/null || echo "Failed to generate X authentication"
+xauth add :1 . $(mcookie) 2>/dev/null || echo "Failed to add authentication with mcookie"
+
 # Disable access control to allow connections to the X server
-xhost + 2>/dev/null || true
+xhost + 2>/dev/null || echo "Failed to disable access control"
+xhost +localhost 2>/dev/null || echo "Failed to add localhost to access control"
 
 # Wait for X server to be fully available (up to 30 seconds)
 for i in {1..30}; do
@@ -33,6 +42,13 @@ if xdpyinfo >/dev/null 2>&1; then
     DISPLAY=$DISPLAY xset s off || echo "Failed to turn off screen saver"
 else
     echo "ERROR: X server is still not available after waiting"
+    # Try to fix X server
+    vncserver -kill $DISPLAY >/dev/null 2>&1 || echo "No VNC server to kill"
+    rm -f /tmp/.X1-lock >/dev/null 2>&1
+    rm -f /tmp/.X11-unix/X1 >/dev/null 2>&1
+    sleep 2
+    vncserver $DISPLAY -depth 24 -geometry 1280x1024 -localhost no >/dev/null 2>&1
+    sleep 5
 fi
 
 # Start icewm with proper error handling and debug output
