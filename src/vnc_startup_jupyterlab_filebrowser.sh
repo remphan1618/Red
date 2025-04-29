@@ -66,9 +66,9 @@ trap cleanup SIGINT SIGTERM
 ## resolve_vnc_connection
 VNC_IP=$(hostname -i)
 
-## change vnc password
-echo -e "\n------------------ change VNC password  ------------------"
-# first entry is control, second is view (if only one is valid for both)
+## change vnc password - making it completely open
+echo -e "\n------------------ disabling VNC password ------------------"
+# Set VNC to no security mode
 mkdir -p "$HOME/.vnc"
 PASSWD_PATH="$HOME/.vnc/passwd"
 
@@ -77,14 +77,9 @@ if [[ -f $PASSWD_PATH ]]; then
     rm -f $PASSWD_PATH
 fi
 
-if [[ $VNC_VIEW_ONLY == "true" ]]; then
-    echo "start VNC server in VIEW ONLY mode!"
-    #create random pw to prevent access
-    echo $(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20) | vncpasswd -f > $PASSWD_PATH
-fi
-echo "$VNC_PW" | vncpasswd -f >> $PASSWD_PATH
-chmod 600 $PASSWD_PATH
-
+# Create an empty password file
+touch $PASSWD_PATH
+chmod 644 $PASSWD_PATH
 
 ## start vncserver and noVNC webclient
 echo -e "\n------------------ start noVNC  ----------------------------"
@@ -100,11 +95,8 @@ vncserver -kill $DISPLAY &> /logs/vnc_startup.log \
 
 echo -e "start vncserver with param: VNC_COL_DEPTH=$VNC_COL_DEPTH, VNC_RESOLUTION=$VNC_RESOLUTION\n..."
 
-# Modified to explicitly bind to all interfaces
-vnc_cmd="vncserver $DISPLAY -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -localhost no -interface 0.0.0.0 PasswordFile=$HOME/.vnc/passwd --I-KNOW-THIS-IS-INSECURE"
-if [[ ${VNC_PASSWORDLESS:-} == "true" ]]; then
-  vnc_cmd="${vnc_cmd} -SecurityTypes None"
-fi
+# Modified to disable all security and authentication
+vnc_cmd="vncserver $DISPLAY -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -localhost no -interface 0.0.0.0 -SecurityTypes None"
 
 if [[ $DEBUG == true ]]; then echo "$vnc_cmd"; fi
 $vnc_cmd > /logs/no_vnc_startup.log 2>&1
