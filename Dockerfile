@@ -52,6 +52,9 @@ RUN python3.10 -m pip install websockify
 # Install tqdm for model downloading
 RUN python3.10 -m pip install tqdm
 
+# Install PySide6 for VisoMaster UI
+RUN python3.10 -m pip install PySide6
+
 # Create necessary directories and files for VNC
 RUN mkdir -p /root/.vnc
 
@@ -159,3 +162,6 @@ exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
 
 # Set the startup command
 CMD ["/bin/bash", "/root/startup.sh"]
+
+# Expose ports for VNC, noVNC, SSH, Jupyter, and Filebrowser
+EXPOSE 5901 6901 22 8080 8585
