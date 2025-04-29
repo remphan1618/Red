@@ -28,7 +28,7 @@ complete_step() {\n\
 ' > /usr/local/bin/build_helpers.sh && chmod +x /usr/local/bin/build_helpers.sh
 
 # Install required packages
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "package_installation" && \
     (apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
@@ -73,7 +73,7 @@ RUN source /usr/local/bin/build_helpers.sh && \
     complete_step "package_installation"
 
 # Set up SSH
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "ssh_setup" && \
     (mkdir -p /var/run/sshd \
     && chmod 0755 /var/run/sshd \
@@ -86,20 +86,20 @@ RUN source /usr/local/bin/build_helpers.sh && \
     complete_step "ssh_setup"
 
 # Create required directories
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "directory_setup" && \
     mkdir -p /workspace /logs /dockerstartup /VisoMaster/{models,Images,Videos,Output,model_assets} && \
     complete_step "directory_setup"
 
 # Set up TigerVNC configuration
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "vnc_config" && \
     (printf '\n# docker-headless-vnc-container:\n$localhost = "no";\n1;\n' >>/etc/tigervnc/vncserver-config-defaults \
     || log_error "vnc_config" "Failed to configure TigerVNC") && \
     complete_step "vnc_config"
 
 # Set up Python and necessary packages (base packages only, rest will be installed by provisioning script)
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "python_setup" && \
     (pip3 install --no-cache-dir --upgrade pip setuptools wheel \
     || log_error "python_setup" "Failed to upgrade pip packages") && \
@@ -107,7 +107,7 @@ RUN source /usr/local/bin/build_helpers.sh && \
 
 # Copy window manager script
 COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "wm_script_setup" && \
     (chmod +x /workspace/wm_startup.sh \
     || log_error "wm_script_setup" "Failed to set permissions on window manager script") && \
@@ -115,7 +115,7 @@ RUN source /usr/local/bin/build_helpers.sh && \
 
 # Copy VNC startup script
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "vnc_script_setup" && \
     (chmod +x /dockerstartup/vnc_startup.sh \
     || log_error "vnc_script_setup" "Failed to set permissions on VNC script") && \
@@ -123,7 +123,7 @@ RUN source /usr/local/bin/build_helpers.sh && \
 
 # Copy provisioning script which now also handles service management
 COPY vast_ai_provisioning_script.sh /dockerstartup/vast_ai_provisioning_script.sh
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     log_step "provisioning_script_setup" && \
     (chmod +x /dockerstartup/vast_ai_provisioning_script.sh \
     || log_error "provisioning_script_setup" "Failed to set permissions on provisioning script") && \
@@ -134,7 +134,7 @@ COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
 # Generate build summary
-RUN source /usr/local/bin/build_helpers.sh && \
+RUN . /usr/local/bin/build_helpers.sh && \
     echo "-------- Dockerfile Build Summary --------" > /logs/build/build_summary.txt && \
     echo "Completed at: $(date)" >> /logs/build/build_summary.txt && \
     echo "" >> /logs/build/build_summary.txt && \
