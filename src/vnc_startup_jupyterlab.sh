@@ -2,6 +2,9 @@
 ### every exit != 0 fails the script
 set -e
 
+## Create logs directory if it doesn't exist
+mkdir -p /logs
+
 ## print out help
 help (){
 echo "
@@ -86,13 +89,13 @@ chmod 600 $PASSWD_PATH
 ## start vncserver and noVNC webclient
 echo -e "\n------------------ start noVNC  ----------------------------"
 if [[ $DEBUG == true ]]; then echo "$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT"; fi
-$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT > $STARTUPDIR/no_vnc_startup.log 2>&1 &
+$NO_VNC_HOME/utils/novnc_proxy --vnc localhost:$VNC_PORT --listen $NO_VNC_PORT > /logs/no_vnc_startup.log 2>&1 &
 PID_SUB=$!
 
 #echo -e "\n------------------ start VNC server ------------------------"
 #echo "remove old vnc locks to be a reattachable container"
-vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
-    || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
+vncserver -kill $DISPLAY &> /logs/vnc_startup.log \
+    || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> /logs/vnc_startup.log \
     || echo "no locks present"
 
 echo -e "start vncserver with param: VNC_COL_DEPTH=$VNC_COL_DEPTH, VNC_RESOLUTION=$VNC_RESOLUTION\n..."
@@ -103,24 +106,24 @@ if [[ ${VNC_PASSWORDLESS:-} == "true" ]]; then
 fi
 
 if [[ $DEBUG == true ]]; then echo "$vnc_cmd"; fi
-$vnc_cmd > $STARTUPDIR/no_vnc_startup.log 2>&1
+$vnc_cmd > /logs/no_vnc_startup.log 2>&1
 
 echo -e "start window manager\n..."
-$HOME/wm_startup.sh &> $STARTUPDIR/wm_startup.log
+$HOME/wm_startup.sh &> /logs/wm_startup.log
 
 ## log connect options
 echo -e "\n\n------------------ VNC environment started ------------------"
 echo -e "\nVNCSERVER started on DISPLAY= $DISPLAY \n\t=> connect via VNC viewer with $VNC_IP:$VNC_PORT"
 echo -e "\nnoVNC HTML client started:\n\t=> connect via http://$VNC_IP:$NO_VNC_PORT/?password=...\n"
 echo -e "Starting jupyterlab at port 8080..."
-nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' &
+nohup jupyter lab --port 8080 --notebook-dir=/workspace --allow-root --no-browser --ip=0.0.0.0  --NotebookApp.token='' --NotebookApp.password='' > /logs/jupyter.log 2>&1 &
 echo -e "Starting Rope..."
-python /workspace/Rope/Rope.py
+python /workspace/Rope/Rope.py > /logs/rope.log 2>&1 &
 
 if [[ $DEBUG == true ]] || [[ $1 =~ -t|--tail-log ]]; then
     echo -e "\n------------------ $HOME/.vnc/*$DISPLAY.log ------------------"
     # if option `-t` or `--tail-log` block the execution and tail the VNC log
-    tail -f $STARTUPDIR/*.log $HOME/.vnc/*$DISPLAY.log
+    tail -f /logs/*.log $HOME/.vnc/*$DISPLAY.log
 fi
 
 if [ -z "$1" ] || [[ $1 =~ -w|--wait ]]; then

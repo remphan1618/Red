@@ -91,22 +91,27 @@ mv -f "$TARGET_MODEL_DIR/$DOWNLOADED_INSWAPPER_NAME" "$TARGET_MODEL_DIR/$TARGET_
 if [ $? -ne 0 ]; then echo "ERROR: Failed to rename/overwrite inswapper model!" >&2; exit 1; fi
 echo "Inswapper model replaced successfully."
 
-# --- Start VNC Service ---
-echo "Attempting to start VNC service in the background..."
-# *** Check for the CORRECT path ***
-if [ ! -f "$VNC_STARTUP_SCRIPT" ]; then
-    echo "ERROR: VNC startup script not found at $VNC_STARTUP_SCRIPT!" >&2
-    exit 1
-fi
-# Run the VNC startup script in the background using bash
-bash "$VNC_STARTUP_SCRIPT" --wait &
-VNC_PID=$! # Get the process ID of the background VNC script
-sleep 5 # Give it a few seconds to potentially start or fail
-# Check if the process is still running (basic check)
-if kill -0 $VNC_PID > /dev/null 2>&1; then
-    echo "VNC startup script process launched (PID: $VNC_PID). Check VNC connection."
+# --- Check if supervisor is running before starting VNC manually ---
+if pgrep supervisord > /dev/null; then
+    echo "Supervisor is running. Skipping manual VNC startup as it should be managed by supervisor."
 else
-    echo "WARNING: VNC startup script process (PID: $VNC_PID) does not seem to be running after launch attempt. Check logs."
+    # --- Start VNC Service only if supervisor isn't running ---
+    echo "Supervisor not detected. Attempting to start VNC service manually in the background..."
+    # *** Check for the CORRECT path ***
+    if [ ! -f "$VNC_STARTUP_SCRIPT" ]; then
+        echo "ERROR: VNC startup script not found at $VNC_STARTUP_SCRIPT!" >&2
+        exit 1
+    fi
+    # Run the VNC startup script in the background using bash
+    bash "$VNC_STARTUP_SCRIPT" --wait &
+    VNC_PID=$! # Get the process ID of the background VNC script
+    sleep 5 # Give it a few seconds to potentially start or fail
+    # Check if the process is still running (basic check)
+    if kill -0 $VNC_PID > /dev/null 2>&1; then
+        echo "VNC startup script process launched (PID: $VNC_PID). Check VNC connection."
+    else
+        echo "WARNING: VNC startup script process (PID: $VNC_PID) does not seem to be running after launch attempt. Check logs."
+    fi
 fi
 
 echo "--- Provisioning Script Finished $(date) ---"
