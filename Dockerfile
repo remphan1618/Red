@@ -65,7 +65,7 @@ RUN chmod +x /workspace/wm_startup.sh /root/wm_startup.sh
 # Set up TigerVNC configuration
 RUN printf '\n# docker-headless-vnc-container:\n$localhost = "no";\n1;\n' >>/etc/tigervnc/vncserver-config-defaults
 
-# Set up Python (without virtual environment) and necessary packages
+# Set up Python and necessary packages
 RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
     pip3 install PySide6 jupyter jupyterlab numpy tqdm
 
@@ -95,5 +95,5 @@ COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
 # Expose ports
 EXPOSE 22 5901 6901 8080 8585 8888
-# Set entrypoint to run provisioning script then start supervisord
-ENTRYPOINT ["/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
+# Set entrypoint to run supervisord directly
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

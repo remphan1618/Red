@@ -78,12 +78,8 @@ mkdir -p /dockerstartup /root/.vnc
 
 # Copy VNC startup script - prioritizing filebrowser version
 if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
-    cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
-    chmod +x /dockerstartup/vnc_startup.sh
     echo "✅ Copied VNC filebrowser startup script to /dockerstartup/vnc_startup.sh"
 elif [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
-    cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh
-    chmod +x /dockerstartup/vnc_startup.sh
     echo "✅ Copied VNC startup script to /dockerstartup/vnc_startup.sh"
 else
     echo "⚠️ Could not find VNC startup script. Supervisor may fail to start VNC."
@@ -115,10 +111,8 @@ else
     echo "✅ Repository updated successfully"
 fi
 
-# Activate Python virtual environment and install requirements
+# Install Python dependencies directly (no virtual environment)
 section "Installing Python dependencies"
-source /opt/venv/bin/activate || handle_error "Failed to activate virtual environment"
-echo "Virtual environment activated"
 
 # Install requirements
 if [ -f "/VisoMaster/requirements_cu124.txt" ]; then
