@@ -174,6 +174,36 @@ if command -v supervisord &> /dev/null; then
         echo "Supervisor is already running. Skipping startup."
     else
         echo "Starting supervisor..."
+        
+        # Make sure VNC script is properly set up before starting supervisor
+        if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
+            echo "Copying VNC filebrowser script to /dockerstartup/"
+            mkdir -p /dockerstartup
+            cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+            chmod +x /dockerstartup/vnc_startup.sh
+            echo "✅ VNC script copied successfully"
+        elif [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
+            echo "Copying VNC script to /dockerstartup/"
+            mkdir -p /dockerstartup
+            cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh
+            chmod +x /dockerstartup/vnc_startup.sh
+            echo "✅ VNC script copied successfully"
+        else
+            echo "⚠️ Could not find VNC startup script. Supervisor may fail to start VNC."
+        fi
+        
+        # Fix SSH configuration
+        echo "Setting up SSH properly..."
+        mkdir -p /run/sshd
+        mkdir -p /var/run/sshd
+        if ! [ -f "/etc/ssh/ssh_host_rsa_key" ]; then
+            ssh-keygen -A
+        fi
+        chmod 600 /etc/ssh/ssh_host_*_key
+        chmod 644 /etc/ssh/ssh_host_*.pub
+        grep -q "^UsePAM no" /etc/ssh/sshd_config || echo "UsePAM no" >> /etc/ssh/sshd_config
+        echo "✅ SSH configuration fixed"
+        
         if [ -f "/etc/supervisor/conf.d/supervisord.conf" ]; then
             supervisord -c /etc/supervisor/conf.d/supervisord.conf
             echo "✅ Supervisor started with config: /etc/supervisor/conf.d/supervisord.conf"
@@ -194,6 +224,11 @@ if command -v supervisord &> /dev/null; then
 else
     echo "❌ Supervisor not installed. Consider adding it to the Dockerfile."
 fi
+
+# Create necessary directories at the end
+section "Creating directories"
+mkdir -p /VisoMaster/{Images,Videos,Output,models} || handle_error "Failed to create directories"
+echo "✅ Directories created successfully at the end of provisioning"
 
 # Script complete
 section "Provisioning complete"

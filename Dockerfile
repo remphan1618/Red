@@ -59,6 +59,11 @@ RUN mkdir -p /etc/supervisor/conf.d
 # Copy supervisor configuration
 COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# Copy VNC startup scripts
+COPY src/vnc_startup_jupyterlab_filebrowser.sh /src/vnc_startup_jupyterlab_filebrowser.sh
+COPY src/vnc_startup_jupyterlab.sh /src/vnc_startup_jupyterlab.sh
+RUN chmod +x /src/vnc_startup_jupyterlab*.sh
+
 # Configure SSH for supervisor
 RUN mkdir -p /var/run/sshd
 RUN echo 'root:password' | chpasswd
@@ -90,10 +95,18 @@ xauth generate :1 . trusted\n\
 mkdir -p /logs /dockerstartup\n\
 chmod 777 /logs\n\
 \n\
-# Copy VNC startup script if it doesn't exist\n\
+# Copy VNC startup script with filebrowser version prioritized\n\
 if [ ! -f /dockerstartup/vnc_startup.sh ]; then\n\
-    cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh\n\
-    chmod +x /dockerstartup/vnc_startup.sh\n\
+    if [ -f /src/vnc_startup_jupyterlab_filebrowser.sh ]; then\n\
+        echo "Using filebrowser VNC script..."\n\
+        cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh\n\
+    elif [ -f /src/vnc_startup_jupyterlab.sh ]; then\n\
+        echo "Using regular VNC script..."\n\
+        cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh\n\
+    else\n\
+        echo "ERROR: No VNC startup scripts found!"\n\
+    fi\n\
+    chmod +x /dockerstartup/vnc_startup.sh 2>/dev/null || true\n\
 fi\n\
 \n\
 # Start supervisor which will manage all services\n\
