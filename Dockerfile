@@ -161,6 +161,16 @@ echo "Starting supervisor..."\n\
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf\n\
 ' > /root/startup.sh && chmod +x /root/startup.sh
 
+# Create workspace directory if not exists
+RUN mkdir -p /workspace
+
+# Copy the health check script and notebook to the workspace
+COPY health_check.sh /workspace/health_check.sh
+RUN chmod +x /workspace/health_check.sh
+
+# Create Jupyter notebook for health monitoring
+COPY src/view_ai_context.ipynb /workspace/view_ai_context.ipynb
+
 # Clone VisoMaster (the provisioning script will handle dependencies and models)
 WORKDIR /workspace
 

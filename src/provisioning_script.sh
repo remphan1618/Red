@@ -39,7 +39,7 @@ fi
 # Clone or update repository
 section "Cloning/Updating repository"
 REPO_DIR="/VisoMaster"
-GIT_URL="https://github.com/BrianP8701/VisoMaster.git"
+GIT_URL="https://github.com/remphan1618/VisoMaster.git"
 
 if [ -d "$REPO_DIR" ] && [ -d "$REPO_DIR/.git" ]; then
     echo "Repository already exists, updating..." | tee -a $LOG_FILE
