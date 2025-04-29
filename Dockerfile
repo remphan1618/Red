@@ -37,8 +37,8 @@ RUN touch /root/.Xauthority
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy provisioning script
-COPY provisioning_script.sh /root/provisioning_script.sh
+# Copy provisioning script - using the correct path from src directory
+COPY src/provisioning_script.sh /root/provisioning_script.sh
 RUN chmod +x /root/provisioning_script.sh
 
 # Create startup script
