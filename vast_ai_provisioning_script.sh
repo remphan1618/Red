@@ -34,11 +34,6 @@ section() {
     echo "==============================================="
 }
 
-# Create necessary directories
-section "Creating directories"
-mkdir -p /VisoMaster/{Images,Videos,Output,models} || handle_error "Failed to create directories"
-echo "✅ Directories created successfully"
-
 # Install SSH server (which was missing and causing errors)
 section "Installing SSH server"
 if [ ! -f "/usr/sbin/sshd" ]; then
@@ -81,19 +76,25 @@ fi
 section "Setting up VNC environment"
 mkdir -p /dockerstartup /root/.vnc
 
+# Copy VNC startup script - prioritizing filebrowser version
+if [ -f "/src/vnc_startup_jupyterlab_filebrowser.sh" ]; then
+    cp /src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
+    chmod +x /dockerstartup/vnc_startup.sh
+    echo "✅ Copied VNC filebrowser startup script to /dockerstartup/vnc_startup.sh"
+elif [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
+    cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh
+    chmod +x /dockerstartup/vnc_startup.sh
+    echo "✅ Copied VNC startup script to /dockerstartup/vnc_startup.sh"
+else
+    echo "⚠️ Could not find VNC startup script. Supervisor may fail to start VNC."
+fi
+
 # Create VNC password
 if [ ! -f "/root/.vnc/passwd" ] && command -v vncpasswd &> /dev/null; then
     echo "Creating VNC password..."
     echo "vncpasswd123" | vncpasswd -f > /root/.vnc/passwd
     chmod 600 /root/.vnc/passwd
     echo "✅ VNC password created"
-fi
-
-# Copy VNC startup script
-if [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
-    cp /src/vnc_startup_jupyterlab.sh /dockerstartup/vnc_startup.sh
-    chmod +x /dockerstartup/vnc_startup.sh
-    echo "✅ Copied VNC startup script to /dockerstartup/vnc_startup.sh"
 fi
 
 # Clone repository if it doesn't exist, or update if it does
