@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     xauth \
     x11-xserver-utils \
-    xdpyinfo \
+    x11-utils \
     xterm \
     tigervnc-standalone-server \
     tigervnc-common \
