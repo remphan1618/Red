@@ -133,6 +133,15 @@ RUN . /usr/local/bin/build_helpers.sh && \
 COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
+# Install requirements immediately after copying them
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "requirements_installation" && \
+    (pip3 install -r /VisoMaster/requirements.txt && \
+     pip3 install -r /VisoMaster/requirements_cu124.txt && \
+     pip3 install opencv-python-headless pyqt-toast-notification==1.3.2 \
+    || log_error "requirements_installation" "Failed to install requirements") && \
+    complete_step "requirements_installation"
+
 # Generate build summary
 RUN . /usr/local/bin/build_helpers.sh && \
     echo "-------- Dockerfile Build Summary --------" > /logs/build/build_summary.txt && \

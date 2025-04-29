@@ -26,6 +26,27 @@ echo "==============================================="
 echo "Starting VisoMaster Script: $(date)"
 echo "==============================================="
 
+# Print environment variables for debugging - ADDED FOR TROUBLESHOOTING
+echo "Environment variables:"
+printenv | grep -E 'PROVISION|JUPYTER|VNC|VAST|CONTAINER' || echo "No relevant environment variables found"
+
+# Print system info for debugging - ADDED FOR TROUBLESHOOTING
+echo "System information:"
+uname -a
+cat /etc/os-release 2>/dev/null || echo "OS release info not available"
+echo "Disk space:"
+df -h /
+
+# Check for required tools - ADDED FOR TROUBLESHOOTING
+echo "Checking for required tools:"
+for cmd in curl wget git pip python3 bash vncserver; do
+    if command -v $cmd &> /dev/null; then
+        echo "✅ $cmd: $(which $cmd)"
+    else
+        echo "❌ $cmd: Not found"
+    fi
+done
+
 # Parse command line arguments
 SERVICES_ONLY=false
 if [[ "$1" == "--services-only" ]]; then
