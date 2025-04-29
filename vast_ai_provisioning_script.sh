@@ -42,12 +42,36 @@ echo "✅ Directories created successfully"
 section "Installing SSH server"
 if [ ! -f "/usr/sbin/sshd" ]; then
     echo "OpenSSH server not found, installing..."
-    apt-get update || handle_error "apt-get update failed"
-    apt-get install -y openssh-server || handle_error "Failed to install openssh-server"
     
-    # Configure SSH
-    mkdir -p /run/sshd
-    echo "✅ SSH server installed successfully"
+    # More comprehensive approach to fix package conflicts
+    echo "Updating package lists..."
+    apt-get update || handle_error "apt-get update failed"
+    
+    echo "Trying to fix broken packages..."
+    apt-get install -f -y || echo "Warning: Fixing broken packages returned non-zero exit code"
+    
+    echo "Trying apt-get dist-upgrade to resolve dependency issues..."
+    apt-get dist-upgrade -y || echo "Warning: apt-get dist-upgrade returned non-zero exit code"
+    
+    echo "Attempting to install openssh-server with dependency resolution..."
+    apt-get install -y --no-install-recommends openssh-server
+    
+    # If previous method failed, try downgrading openssh-client
+    if [ $? -ne 0 ]; then
+        echo "Standard installation failed, trying alternative approach..."
+        echo "Installing specific versions to resolve dependency conflict..."
+        apt-get install -y --allow-downgrades openssh-client=1:8.2p1-4ubuntu0.11 openssh-server
+    fi
+    
+    # Check if installation was successful
+    if [ -f "/usr/sbin/sshd" ]; then
+        # Configure SSH
+        mkdir -p /run/sshd
+        echo "✅ SSH server installed successfully"
+    else
+        echo "⚠️ Failed to install SSH server automatically. Manual intervention may be required."
+        echo "Continuing with provisioning..."
+    fi
 else
     echo "✅ SSH server already installed"
 fi
