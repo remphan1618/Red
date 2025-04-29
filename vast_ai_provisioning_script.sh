@@ -224,99 +224,6 @@ touch /root/.Xauthority
 chmod 600 /root/.Xauthority
 echo "✅ X11 authentication setup"
 
-# Update supervisord configuration
-section "Setting up Supervisor"
-mkdir -p /etc/supervisor/conf.d
-
-cat > /etc/supervisor/conf.d/supervisord.conf << 'EOL'
-[supervisord]
-nodaemon=true
-user=root
-logfile=/logs/supervisord.log
-logfile_maxbytes=10MB
-logfile_backups=3
-pidfile=/tmp/supervisord.pid
-
-[program:setup_environment]
-command=/bin/bash -c "mkdir -p /workspace && touch /root/.Xauthority && chmod 600 /root/.Xauthority && xauth generate :1 . trusted || echo 'Failed to generate auth'"
-autostart=true
-autorestart=false
-startretries=1
-startsecs=0
-priority=5
-stdout_logfile=/logs/setup_env.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=3
-stderr_logfile=/logs/setup_env_err.log
-stderr_logfile_maxbytes=10MB
-stderr_logfile_backups=3
-user=root
-
-[program:jupyter]
-command=jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password='' --NotebookApp.allow_origin='*' --NotebookApp.base_url=${JUPYTER_BASE_URL:-/}
-directory=/VisoMaster
-autostart=true
-autorestart=true
-priority=20
-stdout_logfile=/logs/jupyter.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=3
-stderr_logfile=/logs/jupyter_err.log
-stderr_logfile_maxbytes=10MB
-stderr_logfile_backups=3
-user=root
-
-[program:vnc]
-command=/dockerstartup/vnc_startup.sh --wait
-autostart=true
-autorestart=true
-priority=30
-stdout_logfile=/logs/vnc.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=3
-stderr_logfile=/logs/vnc_err.log
-stderr_logfile_maxbytes=10MB
-stderr_logfile_backups=3
-user=root
-
-[program:visomaster]
-command=/bin/bash -c "cd /VisoMaster && if [ ! -f 'main.py' ]; then echo 'Creating placeholder main.py'; cat > main.py << 'EOF'
-#!/usr/bin/env python3
-print('VisoMaster placeholder script')
-print('The actual main.py was not found in the repository.')
-print('Please check the repository structure and update accordingly.')
-while True:
-    import time
-    time.sleep(60)
-EOF
-chmod +x main.py; fi && ls -la && python3 main.py"
-autostart=true
-autorestart=true
-startretries=3
-startsecs=5
-directory=/VisoMaster
-environment=DISPLAY=:1,XAUTHORITY=/root/.Xauthority
-stdout_logfile=/logs/visomaster.log
-stdout_logfile_maxbytes=10MB
-stdout_logfile_backups=3
-stderr_logfile=/logs/visomaster_err.log
-stderr_logfile_maxbytes=10MB
-stderr_logfile_backups=3
-user=root
-EOL
-
-echo "✅ Supervisor configuration updated"
-
-# Restart supervisor to apply changes
-if pgrep supervisord > /dev/null; then
-    echo "Restarting supervisor..."
-    supervisorctl reload
-else
-    echo "Starting supervisor..."
-    supervisord -c /etc/supervisor/conf.d/supervisord.conf
-fi
-echo "✅ Supervisor restarted"
-
 # Create required directories
 section "Creating directories"
 mkdir -p /VisoMaster/{Images,Videos,Output,models} 
@@ -336,9 +243,165 @@ else
     echo "❌ /VisoMaster directory is missing"
 fi
 
+# Create a combined startup script that will be called by Docker CMD
+section "Creating integrated startup script"
+cat > /dockerstartup/integrated_startup.sh << 'EOL'
+#!/bin/bash
+# VisoMaster integrated startup script
+
+# Function to log messages with timestamps
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /logs/startup.log
+}
+
+# Setup environment (will only run if needed)
+setup_environment() {
+  log "Setting up environment..."
+  mkdir -p /workspace 
+  
+  # Setup X11 auth
+  mkdir -p /root/.vnc
+  touch /root/.Xauthority
+  chmod 600 /root/.Xauthority
+  xauth generate :1 . trusted || log 'Failed to generate auth'
+  
+  log "Environment setup complete"
+}
+
+# Start Jupyter Lab
+start_jupyter() {
+  log "Starting Jupyter Lab..."
+  cd /VisoMaster
+  nohup jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+    --NotebookApp.token='' --NotebookApp.password='' \
+    --NotebookApp.allow_origin='*' --NotebookApp.base_url=${JUPYTER_BASE_URL:-/} \
+    > /logs/jupyter.log 2> /logs/jupyter_err.log &
+  
+  log "Jupyter Lab started"
+}
+
+# Start VNC server
+start_vnc() {
+  log "Starting VNC server..."
+  
+  # Kill any existing VNC servers
+  vncserver -kill :1 &> /logs/vnc.log || true
+  
+  # Start VNC service
+  nohup /dockerstartup/vnc_startup.sh --wait > /logs/vnc.log 2> /logs/vnc_err.log &
+  
+  log "VNC server started"
+}
+
+# Start VisoMaster application
+start_visomaster() {
+  log "Starting VisoMaster..."
+  cd /VisoMaster
+  
+  # List directory contents
+  ls -la
+  
+  # Start application
+  export DISPLAY=:1
+  export XAUTHORITY=/root/.Xauthority
+  nohup python3 main.py > /logs/visomaster.log 2> /logs/visomaster_err.log &
+  
+  log "VisoMaster application started"
+}
+
+# Monitor processes and keep container running
+monitor_services() {
+  log "Starting service monitoring..."
+  
+  # Function to check if process is running
+  is_running() {
+    pgrep -f "$1" > /dev/null
+  }
+  
+  # Main monitoring loop
+  while true; do
+    # Check and restart Jupyter if needed
+    if ! is_running "jupyter lab"; then
+      log "WARNING: Jupyter Lab not running, restarting..."
+      start_jupyter
+    fi
+    
+    # Check and restart VNC if needed
+    if ! is_running "vnc"; then
+      log "WARNING: VNC server not running, restarting..."
+      start_vnc
+    fi
+    
+    # Check and restart VisoMaster if needed
+    if ! is_running "python3 main.py"; then
+      log "WARNING: VisoMaster not running, restarting..."
+      start_visomaster
+    fi
+    
+    # Sleep before next check
+    sleep 30
+  done
+}
+
+# Main execution
+log "======= Starting VisoMaster services ======="
+
+# Run setup and start services
+setup_environment
+start_jupyter
+start_vnc
+start_visomaster
+
+# Keep checking services and container alive
+monitor_services
+EOL
+
+chmod +x /dockerstartup/integrated_startup.sh
+echo "✅ Integrated startup script created"
+
+# Create a simple systemd service file to start the integrated script at boot
+cat > /etc/systemd/system/visomaster.service << EOF
+[Unit]
+Description=VisoMaster Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /dockerstartup/integrated_startup.sh
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/logs/visomaster_service.log
+StandardError=append:/logs/visomaster_service_err.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service to start at boot
+systemctl enable visomaster.service || echo "NOTE: Could not enable systemd service (normal if not using systemd)"
+
+# Update the Docker CMD entry point to use our script (this will be used if not using systemd)
+echo '#!/bin/bash
+exec /bin/bash /dockerstartup/integrated_startup.sh
+' > /dockerstartup/cmd_entrypoint.sh
+chmod +x /dockerstartup/cmd_entrypoint.sh
+
+# Modify the Dockerfile CMD directive if it exists
+if [ -f "/Dockerfile" ]; then
+    sed -i 's|^CMD.*|CMD ["/bin/bash", "/dockerstartup/integrated_startup.sh"]|g' /Dockerfile
+    echo "✅ Updated Dockerfile CMD to use integrated script"
+fi
+
 # Script complete
 section "Provisioning complete"
 echo "VisoMaster environment has been successfully provisioned."
 echo "Completed at: $(date)"
 echo "Log file available at: $LOG_FILE"
 echo "==============================================="
+
+# Start the integrated script directly if requested
+if [ "$1" = "--start" ]; then
+    echo "Starting integrated services directly..."
+    exec /bin/bash /dockerstartup/integrated_startup.sh
+fi

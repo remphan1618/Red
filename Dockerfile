@@ -81,8 +81,8 @@ RUN touch /root/.Xauthority && \
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
-# Copy startup script
-COPY src/startup.sh /dockerstartup/startup.sh
+# Copy startup script from root directory
+COPY startup.sh /dockerstartup/startup.sh
 RUN chmod +x /dockerstartup/startup.sh
 
 # Copy and activate provisioning script
