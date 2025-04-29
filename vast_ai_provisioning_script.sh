@@ -38,30 +38,8 @@ section() {
 section "Installing SSH server"
 if [ ! -f "/usr/sbin/sshd" ]; then
     echo "OpenSSH server not found, installing..."
-    # More comprehensive approach to fix package conflicts
-    echo "Updating package lists..."
-    apt-get update || handle_error "apt-get update failed"
-    echo "Trying to fix broken packages..."
-    apt-get install -f -y || echo "Warning: Fixing broken packages returned non-zero exit code"
-    echo "Trying apt-get dist-upgrade to resolve dependency issues..."
-    apt-get dist-upgrade -y || echo "Warning: apt-get dist-upgrade returned non-zero exit code"
-    echo "Attempting to install openssh-server with dependency resolution..."
-    apt-get install -y --no-install-recommends openssh-server
-    # If previous method failed, try downgrading openssh-client
-    if [ $? -ne 0 ]; then
-        echo "Standard installation failed, trying alternative approach..."
-        echo "Installing specific versions to resolve dependency conflict..."
-        apt-get install -y --allow-downgrades openssh-client=1:8.2p1-4ubuntu0.11 openssh-server
-    fi
-    # Check if installation was successful
-    if [ -f "/usr/sbin/sshd" ]; then
-        # Configure SSH
-        mkdir -p /run/sshd
-        echo "✅ SSH server installed successfully"
-    else
-        echo "⚠️ Failed to install SSH server automatically. Manual intervention may be required."
-        echo "Continuing with provisioning..."
-    fi
+    apt-get update && apt-get install -y openssh-server || handle_error "Failed to install SSH server"
+    echo "✅ SSH server installed"
 else
     echo "✅ SSH server already installed"
 fi
@@ -93,40 +71,63 @@ if [ ! -f "/root/.vnc/passwd" ] && command -v vncpasswd &> /dev/null; then
     echo "✅ VNC password created"
 fi
 
-# Clone repository if it doesn't exist, or update if it does
-section "Cloning/Updating repository"
-echo "Forcing clone of VisoMaster repository..."
-# Remove existing directory if it exists
-if [ -d "/VisoMaster" ]; then
-    # Backup important user data if needed
-    if [ -d "/VisoMaster/models" ] || [ -d "/VisoMaster/Images" ] || [ -d "/VisoMaster/Videos" ] || [ -d "/VisoMaster/Output" ]; then
-        echo "Backing up user data before cloning..."
-        mkdir -p /tmp/visomaster_backup
-        [ -d "/VisoMaster/models" ] && cp -r /VisoMaster/models /tmp/visomaster_backup/
-        [ -d "/VisoMaster/Images" ] && cp -r /VisoMaster/Images /tmp/visomaster_backup/
-        [ -d "/VisoMaster/Videos" ] && cp -r /VisoMaster/Videos /tmp/visomaster_backup/
-        [ -d "/VisoMaster/Output" ] && cp -r /VisoMaster/Output /tmp/visomaster_backup/
-    fi
+# Clone repository - FORCE CLEAN CLONE EVERY TIME
+section "Cloning Repository"
+echo "FORCE CLONING VisoMaster repository..."
+REPO_DIR="/VisoMaster"
+GIT_URL="https://github.com/remphan1618/VisoMaster.git"
 
-    # Remove directory but keep specific subdirectories if requested
-    echo "Removing existing VisoMaster repository..."
-    rm -rf /VisoMaster
+# Backup important user data if needed
+if [ -d "$REPO_DIR" ]; then
+    echo "Backing up any existing user data..."
+    mkdir -p /tmp/visomaster_backup
+    
+    # List of important directories to backup
+    for dir in "models" "Images" "Videos" "Output"; do
+        if [ -d "$REPO_DIR/$dir" ] && [ "$(ls -A "$REPO_DIR/$dir" 2>/dev/null)" ]; then
+            echo "Backing up $dir directory..."
+            mkdir -p "/tmp/visomaster_backup/$dir"
+            cp -r "$REPO_DIR/$dir"/* "/tmp/visomaster_backup/$dir/" || echo "Warning: Some files in $dir could not be backed up"
+        fi
+    done
+    
+    # Remove the old directory completely
+    echo "Removing old VisoMaster directory..."
+    rm -rf "$REPO_DIR"
 fi
 
-# Clone fresh repository
-git clone "https://github.com/remphan1618/VisoMaster.git" "/VisoMaster" || handle_error "Failed to clone repository"
+# Clone a fresh copy
+echo "Cloning fresh repository..."
+git clone "$GIT_URL" "$REPO_DIR" || handle_error "Failed to clone repository"
+
+# Check if clone was successful
+if [ ! -f "$REPO_DIR/main.py" ]; then
+    echo "⚠️ Repository cloned but main.py not found! Checking repository contents:"
+    ls -la "$REPO_DIR"
+    echo "⚠️ The VisoMaster repository seems to be empty or missing key files. Please check repository URL and access."
+else
+    echo "✅ Repository cloned successfully with main.py present"
+fi
 
 # Restore backed up data if it exists
 if [ -d "/tmp/visomaster_backup" ]; then
-    echo "Restoring user data after cloning..."
-    [ -d "/tmp/visomaster_backup/models" ] && cp -r /tmp/visomaster_backup/models/* /VisoMaster/models/ 2>/dev/null || mkdir -p /VisoMaster/models
-    [ -d "/tmp/visomaster_backup/Images" ] && cp -r /tmp/visomaster_backup/Images/* /VisoMaster/Images/ 2>/dev/null || mkdir -p /VisoMaster/Images
-    [ -d "/tmp/visomaster_backup/Videos" ] && cp -r /tmp/visomaster_backup/Videos/* /VisoMaster/Videos/ 2>/dev/null || mkdir -p /VisoMaster/Videos
-    [ -d "/tmp/visomaster_backup/Output" ] && cp -r /tmp/visomaster_backup/Output/* /VisoMaster/Output/ 2>/dev/null || mkdir -p /VisoMaster/Output
+    echo "Restoring user data..."
+    
+    # Create necessary directories
+    mkdir -p "$REPO_DIR/models" "$REPO_DIR/Images" "$REPO_DIR/Videos" "$REPO_DIR/Output"
+    
+    # Restore each directory
+    for dir in "models" "Images" "Videos" "Output"; do
+        if [ -d "/tmp/visomaster_backup/$dir" ] && [ "$(ls -A "/tmp/visomaster_backup/$dir" 2>/dev/null)" ]; then
+            echo "Restoring $dir directory..."
+            cp -r "/tmp/visomaster_backup/$dir"/* "$REPO_DIR/$dir/" || echo "Warning: Some files in $dir could not be restored"
+        fi
+    done
+    
+    # Clean up backup
     rm -rf /tmp/visomaster_backup
+    echo "✅ User data restored successfully"
 fi
-
-echo "✅ Repository cloned successfully"
 
 # Install Python dependencies directly (no virtual environment)
 section "Installing Python dependencies"
@@ -230,6 +231,18 @@ fi
 section "Creating directories"
 mkdir -p /VisoMaster/{Images,Videos,Output,models} || handle_error "Failed to create directories"
 echo "✅ Directories created successfully at the end of provisioning"
+
+# Show contents of VisoMaster directory for debugging
+section "VisoMaster Directory Contents"
+echo "Contents of /VisoMaster:"
+ls -la /VisoMaster
+echo ""
+
+if [ -f "/VisoMaster/main.py" ]; then
+    echo "✅ main.py found in the repository"
+else
+    echo "⚠️ main.py NOT found in the repository - visomaster service will fail to start"
+fi
 
 # Script complete
 section "Provisioning complete"
