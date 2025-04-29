@@ -22,7 +22,8 @@ echo "==============================================="
 handle_error() {
     echo "ERROR: $1" >&2
     echo "See $LOG_FILE for details"
-    exit 1
+    # Don't exit on errors anymore - allow script to continue
+    echo "Continuing execution despite the error..."
 }
 
 # Function to log section start
@@ -95,12 +96,17 @@ if [ -f "/src/vnc_startup_jupyterlab.sh" ]; then
     echo "✅ Copied VNC startup script to /dockerstartup/vnc_startup.sh"
 fi
 
-# Clone repository if it doesn't exist
-section "Cloning repository"
+# Clone repository if it doesn't exist, or update if it does
+section "Cloning/Updating repository"
 if [ ! -d "/VisoMaster/.git" ]; then
-    echo "Cloning VisoMaster repository..."
-    git clone "https://github.com/remphan1618/VisoMaster.git" "/VisoMaster" || handle_error "Failed to clone repository"
-    echo "✅ Repository cloned successfully"
+    echo "Attempting to clone VisoMaster repository..."
+    if [ -d "/VisoMaster" ] && [ "$(ls -A /VisoMaster)" ]; then
+        echo "Directory /VisoMaster exists and is not empty, skipping clone"
+        echo "✅ Using existing VisoMaster directory"
+    else
+        git clone "https://github.com/remphan1618/VisoMaster.git" "/VisoMaster" || handle_error "Failed to clone repository"
+        echo "✅ Repository cloned successfully"
+    fi
 else
     echo "Repository already exists, updating..."
     cd /VisoMaster
@@ -158,6 +164,35 @@ section "Setting permissions"
 chown -R root:root /VisoMaster
 chmod -R 755 /VisoMaster
 echo "✅ Permissions set"
+
+# Start supervisor if it's installed
+section "Starting supervisor"
+if command -v supervisord &> /dev/null; then
+    echo "Supervisor is installed, checking if it's already running..."
+    if pgrep supervisord > /dev/null; then
+        echo "Supervisor is already running. Skipping startup."
+    else
+        echo "Starting supervisor..."
+        if [ -f "/etc/supervisor/conf.d/supervisord.conf" ]; then
+            supervisord -c /etc/supervisor/conf.d/supervisord.conf
+            echo "✅ Supervisor started with config: /etc/supervisor/conf.d/supervisord.conf"
+        else
+            echo "❌ Supervisor config not found at /etc/supervisor/conf.d/supervisord.conf"
+            echo "Checking for supervisor config in alternate locations..."
+            if [ -f "/src/supervisord.conf" ]; then
+                # Copy config to expected location
+                mkdir -p /etc/supervisor/conf.d
+                cp /src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+                supervisord -c /etc/supervisor/conf.d/supervisord.conf
+                echo "✅ Copied config from /src/supervisord.conf and started supervisor"
+            else
+                echo "❌ Could not find supervisor config. Services will not start automatically."
+            fi
+        fi
+    fi
+else
+    echo "❌ Supervisor not installed. Consider adding it to the Dockerfile."
+fi
 
 # Script complete
 section "Provisioning complete"
