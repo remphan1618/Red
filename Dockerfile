@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     supervisor \
     xauth \
-    mcookie \
+    # Replacing mcookie with x11-apps which contains the mcookie utility
+    x11-apps \
     openbox \
     tigervnc-standalone-server \
     # X11/VNC required packages
@@ -93,7 +94,7 @@ COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
 # Expose ports
-EXPOSE 22 5901 6901 8080 8585 8888
-
+EXPOSE 22 5901 6901 8080 8585 8888# Set entrypoint to run provisioning script then start supervisord
+EXPOSE 22 5901 6901 8080 8585 8888c /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
 # Set entrypoint to run provisioning script then start supervisord
 ENTRYPOINT ["/bin/bash", "-c", "/tmp/provisioning_script.sh && exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf"]
