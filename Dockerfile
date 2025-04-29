@@ -6,6 +6,15 @@ ENTRYPOINT []
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Set VNC environment variables
+ENV VNC_PW=vncpasswd123 \
+    VNC_RESOLUTION=1280x1024 \
+    VNC_COL_DEPTH=24 \
+    VNC_PORT=5901 \
+    NO_VNC_PORT=6901 \
+    DISPLAY=:1 \
+    NO_VNC_HOME=/usr/share/novnc
+
 # Create logs directory early with correct permissions
 RUN mkdir -p /logs && chmod 777 /logs
 
@@ -36,6 +45,9 @@ RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
 # Install python websockify properly
 RUN python3.10 -m pip install websockify
 
+# Install tqdm for model downloading
+RUN python3.10 -m pip install tqdm
+
 # Create necessary directories and files for VNC
 RUN mkdir -p /root/.vnc
 
@@ -62,7 +74,8 @@ COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Copy VNC startup scripts
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /src/vnc_startup_jupyterlab_filebrowser.sh
 COPY src/vnc_startup_jupyterlab.sh /src/vnc_startup_jupyterlab.sh
-RUN chmod +x /src/vnc_startup_jupyterlab*.sh
+COPY src/debian/icewm/wm_startup.sh /root/wm_startup.sh
+RUN chmod +x /src/vnc_startup_jupyterlab*.sh /root/wm_startup.sh
 
 # Configure SSH for supervisor
 RUN mkdir -p /var/run/sshd
