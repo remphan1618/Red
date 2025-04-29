@@ -1,4 +1,4 @@
-# Guide: Understanding Vast.ai Provisioning, Entrypoint, and On-Start Script Options (with Real Project Examples)
+# VAST.AI Entrypoint and Provisioning Guide
 
 Vast.ai provides several mechanisms to configure and initialize your cloud container environments. It's important to know how each option works, what they're best suited for, and how you can leverage them using practical examples—such as those from your own project.
 
@@ -166,6 +166,53 @@ env >> /etc/environment
 - Your project files:  
   - [`Dockerfile`](https://github.com/remphan1618/Red/blob/main/Dockerfile)
   - [`provisioning_script.sh`](https://github.com/remphan1618/Red/blob/main/provisioning_script.sh)
+
+---
+
+## Common Issues and Solutions
+
+### Multiple ENTRYPOINT Instructions Error
+
+When building Docker images for VAST.AI, you may encounter this error:
+
+```
+WARN: MultipleInstructionsDisallowed: Multiple ENTRYPOINT instructions should not be used in the same stage because only the last one will be used
+```
+
+This typically happens when:
+
+1. The base image already has an ENTRYPOINT defined
+2. You try to add another ENTRYPOINT in your Dockerfile
+
+#### The Error I Made
+
+I initially attempted to fix this by using both `ENTRYPOINT []` (to reset) and then a CMD instruction:
+
+```dockerfile
+# Reset any previous ENTRYPOINT and set our command
+ENTRYPOINT []
+# Use CMD instead of ENTRYPOINT to avoid multiple ENTRYPOINT warnings
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+```
+
+This approach can still trigger the warning because Docker interprets the empty ENTRYPOINT as another ENTRYPOINT instruction, resulting in multiple ENTRYPOINT directives.
+
+#### Correct Solution
+
+Instead, simply use CMD without trying to reset the ENTRYPOINT:
+
+```dockerfile
+# Use CMD without an explicit ENTRYPOINT to avoid the warning
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+```
+
+This approach works because:
+- If the base image has no ENTRYPOINT, your CMD becomes the default command
+- If the base image has an ENTRYPOINT, your CMD becomes arguments to that ENTRYPOINT
+
+#### Another Critical Mistake
+
+When working with Docker images, always be extremely careful not to accidentally change the base image in your Dockerfile. This can completely break your build process and deployment. Always verify the FROM line in your Dockerfile matches your intended base image.
 
 ---
 

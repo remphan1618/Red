@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     tmux \
     git \
-    supervisor \
     xauth \
     # Replacing mcookie with x11-apps which contains the mcookie utility
     x11-apps \
@@ -82,8 +81,9 @@ RUN touch /root/.Xauthority && \
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
-# Copy supervisord configuration
-COPY src/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Copy startup script
+COPY src/startup.sh /dockerstartup/startup.sh
+RUN chmod +x /dockerstartup/startup.sh
 
 # Copy and activate provisioning script
 COPY src/provisioning_script.sh /tmp/provisioning_script.sh
@@ -93,10 +93,8 @@ RUN chmod +x /tmp/provisioning_script.sh
 COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
-# Reset any previous ENTRYPOINT and set our command
-ENTRYPOINT []
-# Use CMD instead of ENTRYPOINT to avoid multiple ENTRYPOINT warnings
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Use the startup script instead of supervisor
+CMD ["/bin/bash", "/dockerstartup/startup.sh"]
 
 # Expose ports
 EXPOSE 22 5901 6901 8080 8585 8888
