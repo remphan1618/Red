@@ -6,22 +6,30 @@ ENTRYPOINT []
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install required packages
+# Install required packages and add deadsnakes PPA for Python 3.10
 RUN apt-get update && apt-get install -y \
-    python3 \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update \
+    && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    python3.10-distutils \
     python3-pip \
     xauth \
     tigervnc-standalone-server \
     tigervnc-common \
     websockify \
     git \
-    python3-venv \
     wget \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pip for Python 3.10
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
+
 # Install python websockify properly
-RUN pip3 install websockify
+RUN python3.10 -m pip install websockify
 
 # Create necessary directories and files for VNC
 RUN mkdir -p /root/.vnc
@@ -33,9 +41,12 @@ RUN mkdir -p /root/.vnc && echo "vncpasswd123" | vncpasswd -f > /root/.vnc/passw
 # Create .Xauthority file
 RUN touch /root/.Xauthority
 
-# Set up Python virtual environment
-RUN python3 -m venv /opt/venv
+# Set up Python virtual environment with Python 3.10
+RUN python3.10 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+
+# Set Python 3.10 as the default python3
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
 # Copy provisioning script - using the correct path from src directory
 COPY src/provisioning_script.sh /root/provisioning_script.sh
