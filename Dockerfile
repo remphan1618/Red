@@ -11,14 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     git \
     xauth \
-    # Replacing mcookie with x11-apps which contains the mcookie utility
     x11-apps \
     openbox \
     tigervnc-standalone-server \
-    # X11/VNC required packages
     xterm \
     xdg-utils \
-    # Add GUI dependencies that were missing (libEGL.so.1 and related dependencies)
+    # GUI dependencies
     libgl1-mesa-glx \
     libegl1 \
     libxkbcommon-x11-0 \
@@ -43,58 +41,42 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     menu \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up SSH properly by creating essential directories and fixing configuration
+# Set up SSH
 RUN mkdir -p /var/run/sshd \
     && chmod 0755 /var/run/sshd \
     && ssh-keygen -A \
-    # Fix SSH configuration to avoid exit code 255
     && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
     && sed -i 's/#UsePAM yes/UsePAM no/' /etc/ssh/sshd_config \
     && echo "PidFile /var/run/sshd/sshd.pid" >> /etc/ssh/sshd_config 
 
-# Create workspace directory
-RUN mkdir -p /workspace
-
-# Copy window manager script to multiple locations to ensure it's found
-COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
-COPY src/debian/icewm/wm_startup.sh /root/wm_startup.sh
-RUN chmod +x /workspace/wm_startup.sh /root/wm_startup.sh
+# Create required directories
+RUN mkdir -p /workspace /logs /dockerstartup /VisoMaster/{models,Images,Videos,Output,model_assets}
 
 # Set up TigerVNC configuration
 RUN printf '\n# docker-headless-vnc-container:\n$localhost = "no";\n1;\n' >>/etc/tigervnc/vncserver-config-defaults
 
-# Set up Python and necessary packages
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip3 install PySide6 jupyter jupyterlab numpy tqdm
+# Set up Python and necessary packages (base packages only, rest will be installed by provisioning script)
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 
-# Create needed directories
-RUN mkdir -p /logs /dockerstartup /VisoMaster/models /VisoMaster/model_assets
+# Copy window manager script
+COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
+RUN chmod +x /workspace/wm_startup.sh
 
-# Set up X11 authentication
-RUN touch /root/.Xauthority && \
-    chmod 600 /root/.Xauthority && \
-    echo 'touch ~/.Xauthority' >> /root/.bashrc && \
-    echo 'xauth generate :1 . trusted' >> /root/.bashrc
-
-# Copy VNC startup script to dockerstartup
+# Copy VNC startup script
 COPY src/vnc_startup_jupyterlab_filebrowser.sh /dockerstartup/vnc_startup.sh
 RUN chmod +x /dockerstartup/vnc_startup.sh
 
-# Copy startup script from root directory
-COPY startup.sh /dockerstartup/startup.sh
-RUN chmod +x /dockerstartup/startup.sh
+# Copy provisioning script which now also handles service management
+COPY vast_ai_provisioning_script.sh /dockerstartup/vast_ai_provisioning_script.sh
+RUN chmod +x /dockerstartup/vast_ai_provisioning_script.sh
 
-# Copy and activate provisioning script
-COPY src/provisioning_script.sh /tmp/provisioning_script.sh
-RUN chmod +x /tmp/provisioning_script.sh
-
-# Copy requirements files
+# Copy requirements files 
 COPY requirements.txt /VisoMaster/requirements.txt
 COPY requirements_124.txt /VisoMaster/requirements_cu124.txt
 
-# Use the startup script instead of supervisor
-CMD ["/bin/bash", "/dockerstartup/startup.sh"]
+# Run the services part of the script at container startup
+CMD ["/bin/bash", "/dockerstartup/vast_ai_provisioning_script.sh", "--services-only"]
 
 # Expose ports
 EXPOSE 22 5901 6901 8080 8585 8888
