@@ -95,7 +95,7 @@ vncserver -kill $DISPLAY &> /logs/vnc_startup.log \
 
 echo -e "start vncserver with param: VNC_COL_DEPTH=$VNC_COL_DEPTH, VNC_RESOLUTION=$VNC_RESOLUTION\n..."
 
-# Modified to explicitly acknowledge the security implications
+# Modified to add required insecure flag with explicit localhost disable
 vnc_cmd="vncserver $DISPLAY -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -localhost no -interface 0.0.0.0 -SecurityTypes None --I-KNOW-THIS-IS-INSECURE"
 
 if [[ $DEBUG == true ]]; then echo "$vnc_cmd"; fi
