@@ -105,6 +105,26 @@ RUN . /usr/local/bin/build_helpers.sh && \
     || log_error "python_setup" "Failed to upgrade pip packages") && \
     complete_step "python_setup"
 
+### Add all install scripts before executing them
+COPY ./src/common/install/ /workspace/install/common/
+COPY ./src/debian/install/ /workspace/install/debian/
+RUN chmod +x /workspace/install/common/* /workspace/install/debian/*
+
+### Install components by executing scripts
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "components_installation" && \
+    (bash /workspace/install/debian/install_custom_fonts.sh && \
+     bash /workspace/install/debian/tigervnc.sh && \
+     bash /workspace/install/common/no_vnc_1.5.0.sh && \
+     bash /workspace/install/debian/firefox.sh && \
+     bash /workspace/install/debian/icewm_ui.sh && \
+     bash /workspace/install/debian/libnss_wrapper.sh \
+     || log_error "components_installation" "Failed to install some components") && \
+    complete_step "components_installation"
+
+### Copy window manager configuration files
+COPY ./src/debian/icewm/ /workspace/
+
 # Copy window manager script
 COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
 RUN . /usr/local/bin/build_helpers.sh && \
