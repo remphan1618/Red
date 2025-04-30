@@ -475,35 +475,46 @@ start_vnc() {
     # Kill any existing VNC servers
     vncserver -kill :1 &> /logs/vnc_kill.log || true
     
-    # Verify VNC startup script exists
-    if [ ! -f "/dockerstartup/vnc_startup.sh" ]; then
-        handle_error "VNC startup script missing" "$service_name"
-        # Create emergency script
-        cat > /dockerstartup/vnc_startup.sh << 'EOL'
-#!/bin/bash
-mkdir -p ~/.vnc
-echo "vncpasswd123" | vncpasswd -f > ~/.vnc/passwd
-chmod 600 ~/.vnc/passwd
-export DISPLAY=:1
-vncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None
-echo "VNC server started on display :1"
-tail -f /dev/null
-EOL
-        chmod +x /dockerstartup/vnc_startup.sh
-    fi
-    
-    # Start VNC service
-    nohup /dockerstartup/vnc_startup.sh --wait > /logs/vnc.log 2> /logs/vnc_err.log &
-    
-    # Verify service started
-    sleep 5
-    if pgrep -f "Xvnc :1" > /dev/null; then
-        log "$service_name server started successfully"
-        echo "STARTED: $(date)" > "$LOG_DIR/${service_name}_STATUS.txt"
-        return 0
+    # Use the VNC startup script from dockerstartup directly instead of custom code
+    if [ -f "/dockerstartup/vnc_startup.sh" ]; then
+        log "Starting VNC using the pre-configured startup script"
+        # Run in background but capture output
+        /dockerstartup/vnc_startup.sh > /logs/vnc_startup.log 2>&1 &
+        
+        # Store the PID for monitoring
+        VNC_PID=$!
+        echo "$VNC_PID" > /logs/vnc_pid.txt
+        
+        # Verify it's running
+        sleep 5
+        if ps -p $VNC_PID > /dev/null; then
+            log "$service_name server started successfully with PID $VNC_PID"
+            echo "STARTED: $(date) with PID $VNC_PID" > "$LOG_DIR/${service_name}_STATUS.txt"
+            return 0
+        else
+            handle_error "$service_name server failed to start" "$service_name"
+            return 1
+        fi
     else
-        handle_error "$service_name server failed to start" "$service_name"
-        return 1
+        handle_error "VNC startup script missing at /dockerstartup/vnc_startup.sh" "$service_name"
+        
+        # Fall back to basic VNC server start
+        mkdir -p ~/.vnc
+        echo "vncpasswd123" | vncpasswd -f > ~/.vnc/passwd
+        chmod 600 ~/.vnc/passwd
+        
+        vncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE > /logs/vnc.log 2> /logs/vnc_err.log
+        
+        # Verify service started
+        sleep 5
+        if pgrep -f "Xvnc :1" > /dev/null; then
+            log "$service_name server started successfully (fallback mode)"
+            echo "STARTED: $(date) - FALLBACK MODE" > "$LOG_DIR/${service_name}_STATUS.txt"
+            return 0
+        else
+            handle_error "$service_name server failed to start even in fallback mode" "$service_name"
+            return 1
+        fi
     fi
 }
 
@@ -599,8 +610,8 @@ setup_environment
 
 # Start each service and track status
 log "Starting essential services..."
+start_vnc     # Start VNC first using the startup script
 start_jupyter
-start_vnc
 start_visomaster
 
 # Create services status summary

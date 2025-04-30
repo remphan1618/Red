@@ -1,5 +1,12 @@
 FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
 
+# Add container labels for better identification and documentation
+LABEL io.k8s.description="Headless VNC Container with Xfce window manager, firefox and chromium" \
+      io.k8s.display-name="Headless VNC Container based on Ubuntu" \
+      io.openshift.expose-services="6901:http,5901:xvnc" \
+      io.openshift.tags="vnc, ubuntu, xfce" \
+      io.openshift.non-scalable=true
+
 # Set up build logging
 RUN mkdir -p /logs/build
 ENV BUILD_LOG="/logs/build/dockerfile_build.log"
@@ -27,6 +34,27 @@ complete_step() {\n\
 }\n\
 ' > /usr/local/bin/build_helpers.sh && chmod +x /usr/local/bin/build_helpers.sh
 
+### Connection ports for controlling the UI:
+### VNC port:5901
+### noVNC webport, connect via http://IP:6901/?password=vncpassword
+ENV DISPLAY=:1 \
+    VNC_PORT=5901 \
+    NO_VNC_PORT=6901
+EXPOSE $VNC_PORT $NO_VNC_PORT
+
+### Environment config
+ENV HOME=/workspace \
+    TERM=xterm \
+    STARTUPDIR=/dockerstartup \
+    INST_SCRIPTS=/workspace/install \
+    NO_VNC_HOME=/workspace/noVNC \
+    DEBIAN_FRONTEND=noninteractive \
+    VNC_COL_DEPTH=24 \
+    VNC_PW=vncpassword \
+    VNC_VIEW_ONLY=false \
+    TZ=Asia/Seoul
+WORKDIR $HOME
+
 # Install required packages
 RUN . /usr/local/bin/build_helpers.sh && \
     log_step "package_installation" && \
@@ -36,9 +64,16 @@ RUN . /usr/local/bin/build_helpers.sh && \
     python3-dev \
     wget \
     curl \
+    git \
+    build-essential \
+    software-properties-common \
+    apt-transport-https \
+    ca-certificates \
     rsync \
     tmux \
-    git \
+    unzip \
+    ffmpeg \
+    jq \
     xauth \
     x11-apps \
     openbox \
@@ -68,9 +103,15 @@ RUN . /usr/local/bin/build_helpers.sh && \
     icewm-common \
     xinit \
     menu \
+    tzdata \
     || log_error "package_installation" "Failed to install some packages") && \
+    ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/* && \
     complete_step "package_installation"
+
+# Set locale
+ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en' LC_ALL='en_US.UTF-8'
 
 # Set up SSH
 RUN . /usr/local/bin/build_helpers.sh && \
@@ -98,7 +139,7 @@ RUN . /usr/local/bin/build_helpers.sh && \
     || log_error "vnc_config" "Failed to configure TigerVNC") && \
     complete_step "vnc_config"
 
-# Set up Python and necessary packages (base packages only, rest will be installed by provisioning script)
+# Set up Python and necessary packages
 RUN . /usr/local/bin/build_helpers.sh && \
     log_step "python_setup" && \
     (pip3 install --no-cache-dir --upgrade pip setuptools wheel \
@@ -106,24 +147,35 @@ RUN . /usr/local/bin/build_helpers.sh && \
     complete_step "python_setup"
 
 ### Add all install scripts before executing them
-COPY ./src/common/install/ /workspace/install/common/
-COPY ./src/debian/install/ /workspace/install/debian/
-RUN chmod +x /workspace/install/common/* /workspace/install/debian/*
+COPY ./src/common/install/ /workspace/install/
+COPY ./src/debian/install/ /workspace/install/
+RUN chmod 765 /workspace/install/*
+
+### Install common tools first
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "tools_installation" && \
+    (bash /workspace/install/tools.sh \
+    || log_error "tools_installation" "Failed to install common tools") && \
+    complete_step "tools_installation"
 
 ### Install components by executing scripts
 RUN . /usr/local/bin/build_helpers.sh && \
     log_step "components_installation" && \
-    (bash /workspace/install/debian/install_custom_fonts.sh && \
-     bash /workspace/install/debian/tigervnc.sh && \
-     bash /workspace/install/common/no_vnc_1.5.0.sh && \
-     bash /workspace/install/debian/firefox.sh && \
-     bash /workspace/install/debian/icewm_ui.sh && \
-     bash /workspace/install/debian/libnss_wrapper.sh \
+    (bash /workspace/install/install_custom_fonts.sh && \
+     bash /workspace/install/tigervnc.sh && \
+     bash /workspace/install/no_vnc_1.5.0.sh && \
+     bash /workspace/install/firefox.sh && \
+     bash /workspace/install/icewm_ui.sh && \
+     bash /workspace/install/libnss_wrapper.sh \
      || log_error "components_installation" "Failed to install some components") && \
     complete_step "components_installation"
 
 ### Copy window manager configuration files
 COPY ./src/debian/icewm/ /workspace/
+
+### Configure startup components
+ADD ./src/common/scripts $STARTUPDIR
+RUN $INST_SCRIPTS/debian/set_user_permission.sh $STARTUPDIR $HOME
 
 # Copy window manager script
 COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
@@ -162,6 +214,29 @@ RUN . /usr/local/bin/build_helpers.sh && \
     || log_error "requirements_installation" "Failed to install requirements") && \
     complete_step "requirements_installation"
 
+### Clone VisoMaster repository
+WORKDIR /workspace
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "repo_clone" && \
+    (git clone https://github.com/remphan1618/VisoMaster.git \
+    || log_error "repo_clone" "Failed to clone repository") && \
+    complete_step "repo_clone"
+
+### Install scikit-image
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "scikit_installation" && \
+    (pip install scikit-image \
+    || log_error "scikit_installation" "Failed to install scikit-image") && \
+    complete_step "scikit_installation"
+
+### Download models (as requested, placed at the end)
+WORKDIR /workspace/VisoMaster/model_assets
+RUN . /usr/local/bin/build_helpers.sh && \
+    log_step "model_download" && \
+    (python download_models.py \
+    || log_error "model_download" "Failed to download models") && \
+    complete_step "model_download"
+
 # Generate build summary
 RUN . /usr/local/bin/build_helpers.sh && \
     echo "-------- Dockerfile Build Summary --------" > /logs/build/build_summary.txt && \
@@ -183,8 +258,12 @@ RUN . /usr/local/bin/build_helpers.sh && \
     echo "------------------------------------------" >> /logs/build/build_summary.txt && \
     cat /logs/build/build_summary.txt
 
-# Run the services part of the script at container startup
-CMD ["/bin/bash", "/dockerstartup/vast_ai_provisioning_script.sh", "--services-only"]
+### Set VNC resolution
+ENV VNC_RESOLUTION=1280x1024
+
+# Set ENTRYPOINT to use the provisioning script which will call the VNC startup
+ENTRYPOINT ["/bin/bash", "/dockerstartup/vast_ai_provisioning_script.sh"]
+CMD ["--wait"]
 
 # Expose ports
 EXPOSE 22 5901 6901 8080 8585 8888
