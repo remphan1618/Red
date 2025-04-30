@@ -315,6 +315,30 @@ EOL
         pip install -r "/VisoMaster/requirements.txt" || handle_error "Failed to install requirements" "Python_Dependencies"
     fi
 
+    # Install PyTorch directly with CUDA 12.4 support - with aggressive retries
+    echo "Installing PyTorch with CUDA 12.4 support..."
+    for i in {1..3}; do
+        echo "PyTorch installation attempt $i of 3..."
+        pip install torch==2.4.1+cu124 torchvision==0.19.1+cu124 torchaudio==2.4.1+cu124 --extra-index-url https://download.pytorch.org/whl/cu124 && break
+        echo "PyTorch installation failed, retrying in 5 seconds..."
+        sleep 5
+    done
+    
+    # Verify PyTorch installation with detailed debugging
+    echo "Verifying PyTorch installation..."
+    if python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda if torch.cuda.is_available() else 'N/A')"; then
+        echo "✅ PyTorch verification successful"
+    else
+        echo "❌ PyTorch verification failed"
+        echo "Checking pip list for torch packages:"
+        pip list | grep -E 'torch|nvidia'
+        echo "Checking Python path:"
+        python -c "import sys; print(sys.path)"
+        echo "Installing torch one more time with verbose output:"
+        pip install -v torch==2.4.1+cu124 torchvision==0.19.1+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+        handle_error "PyTorch verification failed" "Python_Dependencies_PyTorch"
+    fi
+
     # Always install critical packages individually to ensure they're installed even if one fails
     echo "Installing critical packages..."
     for pkg in PySide6 jupyter jupyterlab numpy tqdm; do
@@ -480,14 +504,6 @@ start_vnc() {
         log "Starting VNC using the pre-configured startup script"
         # Run in background but capture output
         /dockerstartup/vnc_startup.sh > /logs/vnc_startup.log 2>&1 &
-        
-        # Store the PID for monitoring
-        VNC_PID=$!
-        echo "$VNC_PID" > /logs/vnc_pid.txt
-        
-        # Verify it's running
-        sleep 5
-        if ps -p $VNC_PID > /dev/null; then
             log "$service_name server started successfully with PID $VNC_PID"
             echo "STARTED: $(date) with PID $VNC_PID" > "$LOG_DIR/${service_name}_STATUS.txt"
             return 0

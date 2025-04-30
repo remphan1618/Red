@@ -214,13 +214,13 @@ RUN . /usr/local/bin/build_helpers.sh && \
     || log_error "requirements_installation" "Failed to install requirements") && \
     complete_step "requirements_installation"
 
-### Clone VisoMaster repository
-WORKDIR /workspace
+# Install PyTorch with CUDA 12.4 support directly (more reliable than requirements)
 RUN . /usr/local/bin/build_helpers.sh && \
-    log_step "repo_clone" && \
-    (git clone https://github.com/remphan1618/VisoMaster.git \
-    || log_error "repo_clone" "Failed to clone repository") && \
-    complete_step "repo_clone"
+    log_step "pytorch_installation" && \
+    (pip3 install torch==2.4.1+cu124 torchvision==0.19.1+cu124 torchaudio==2.4.1+cu124 --extra-index-url https://download.pytorch.org/whl/cu124 && \
+    python3 -c "import torch; print('PyTorch installation verification:'); print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}')" \
+    || log_error "pytorch_installation" "Failed to install PyTorch with CUDA support") && \
+    complete_step "pytorch_installation"
 
 ### Install scikit-image
 RUN . /usr/local/bin/build_helpers.sh && \
@@ -230,7 +230,7 @@ RUN . /usr/local/bin/build_helpers.sh && \
     complete_step "scikit_installation"
 
 ### Download models (as requested, placed at the end)
-WORKDIR /workspace/VisoMaster/model_assets
+WORKDIR /VisoMaster/model_assets
 RUN . /usr/local/bin/build_helpers.sh && \
     log_step "model_download" && \
     (python download_models.py \
