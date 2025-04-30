@@ -1,0 +1,10 @@
+-------- Dockerfile Build Summary --------
+Completed at: Wed Apr 30 10:48:48 AM KST 2025
+
+⚠️ Build completed with 2 errors:
+  - model_download: Failed to download models
+  - requirements_installation: Failed to install requirements
+
+Log file: /logs/build/dockerfile_build.log
+Error log: /logs/build/dockerfile_errors.log
+------------------------------------------
