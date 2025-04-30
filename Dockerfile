@@ -175,7 +175,7 @@ COPY ./src/debian/icewm/ /workspace/
 
 ### Configure startup components
 ADD ./src/common/scripts $STARTUPDIR
-RUN $INST_SCRIPTS/debian/set_user_permission.sh $STARTUPDIR $HOME
+RUN /workspace/install/set_user_permission.sh $STARTUPDIR $HOME
 
 # Copy window manager script
 COPY src/debian/icewm/wm_startup.sh /workspace/wm_startup.sh
