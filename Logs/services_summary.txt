@@ -1,9 +1,0 @@
--------- Services Status Summary --------
-Generated at: Wed Apr 30 11:17:32 AM KST 2025
-
-❌ Jupyter: FAILED - Jupyter failed to start
-✅ VNC: RUNNING - Started at  Wed Apr 30 11:17:26 AM KST 2025 with PID 2123
-❌ VisoMaster: FAILED - VisoMaster application failed to start
-
-Logs available in: /logs/
-----------------------------------------
