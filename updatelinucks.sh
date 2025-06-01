@@ -1,253 +1,237 @@
 #!/bin/bash
 
-# Change to the primary workspace directory
-cd /workspace/
-echo "Operating from $(pwd)"
+source /venv/main/bin/activate
+export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
+COMFYUI_DIR=${WORKSPACE}/ComfyUI
 
-# Cause the script to exit on failure.
-set -eo pipefail
+# Packages are installed after nodes so we can fix them...
+# Corrected order: Core PIP packages first, then nodes, then specific node requirements.
 
-# --- Notebook Download Section (operates in /workspace/) ---
-NOTEBOOK_URL="https://raw.githubusercontent.com/remphan1618/Red/main/Modelgeddah.ipynb"
-OUTPUT_FILENAME="Modelgeddah.ipynb" # Will be saved to /workspace/Modelgeddah.ipynb
+APT_PACKAGES=(
+    #"package-1" # e.g., build-essential, cmake if needed by some pip packages from source
+    #"package-2"
+)
 
-echo "Downloading ${OUTPUT_FILENAME} from ${NOTEBOOK_URL} to $(pwd)/ ..."
-if curl -sSL -o "${OUTPUT_FILENAME}" "${NOTEBOOK_URL}"; then
-    echo "✅ Successfully downloaded ${OUTPUT_FILENAME} to $(pwd)/"
-else
-    echo "❌ Error: Failed to download ${OUTPUT_FILENAME}."
-    if command -v wget &> /dev/null; then
-        echo "Attempting download with wget..."
-        if wget -O "${OUTPUT_FILENAME}" "${NOTEBOOK_URL}"; then
-            echo "✅ Successfully downloaded ${OUTPUT_FILENAME} with wget to $(pwd)/"
-        else
-            echo "❌ Error: Failed to download ${OUTPUT_FILENAME} with wget as well."
-            exit 1
-        fi
-    else
-        exit 1
-    fi
-fi
-# --- End Notebook Download Section ---
+PIP_PACKAGES=(
+    "-U --pre triton"
+    "sageattention==1.0.6"
+    "torch==2.8.0.dev20250507+cu128 torchvision==0.22.0.dev20250508+cu128 torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall"
+    #"package-1" # Other general pip packages
+    #"package-2"
+)
 
-echo "" # Newline for better log readability
+NODES=(
+    "https://github.com/ltdrdata/ComfyUI-Manager"
+    "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+    "https://github.com/kijai/ComfyUI-KJNodes"
+    "https://github.com/cubiq/ComfyUI_essentials"
+    "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"
+    "https://github.com/pollockjj/ComfyUI-MultiGPU"
+    "https://github.com/asagi4/ComfyUI-Adaptive-Guidance"
+    "https://github.com/city96/ComfyUI-GGUF"
+    "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    #"https://github.com/other/node" # Add other ComfyUI nodes here
+)
 
-# --- SwarmUI Update and ComfyUI Setup Section ---
-SWARMUI_DIR_BASENAME="SwarmUI"
-SWARMUI_DIR="/workspace/${SWARMUI_DIR_BASENAME}" # Full path: /workspace/SwarmUI
-SWARMUI_REPO_URL="https://github.com/mcmonkeyprojects/SwarmUI.git"
-SWARMUI_BRANCH="master"
+WORKFLOWS=(
 
-# Mark the SwarmUI directory as safe for Git operations by the current user
-# This resolves "dubious ownership" errors, especially if the directory might exist with different ownership.
-echo "Marking ${SWARMUI_DIR} as a safe directory for Git..."
-# Create .gitconfig if it doesn't exist, as `git config --global` might fail otherwise in some minimal environments
-mkdir -p ~/.config/git # Common location, though git might use ~/.gitconfig directly
-touch ~/.gitconfig
-git config --global --add safe.directory "${SWARMUI_DIR}"
+)
 
-echo "Checking/Updating ${SWARMUI_DIR_BASENAME} (target branch: ${SWARMUI_BRANCH})..."
+CHECKPOINT_MODELS=(
+    "https://civitai.com/api/download/models/798204?type=Model&format=SafeTensor&size=full&fp=fp16"
+    # Add other checkpoint model URLs here
+)
 
-if [ ! -d "$SWARMUI_DIR/.git" ]; then
-    echo "${SWARMUI_DIR_BASENAME} directory at ${SWARMUI_DIR} not found or not a git repository."
-    echo "Attempting to clone ${SWARMUI_REPO_URL} (branch ${SWARMUI_BRANCH}) into ${SWARMUI_DIR}..."
-    if git clone --branch "${SWARMUI_BRANCH}" --depth 1 "${SWARMUI_REPO_URL}" "${SWARMUI_DIR}"; then
-        echo "✅ ${SWARMUI_DIR_BASENAME} cloned successfully into ${SWARMUI_DIR} (branch ${SWARMUI_BRANCH})."
-    else
-        echo "❌ Error: Failed to clone ${SWARMUI_DIR_BASENAME} from ${SWARMUI_REPO_URL}."
-        exit 1
-    fi
-else
-    echo "${SWARMUI_DIR_BASENAME} found at ${SWARMUI_DIR}. Checking for updates on branch '${SWARMUI_BRANCH}'..."
-    pushd "$SWARMUI_DIR" > /dev/null
-    
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-    echo "Current local branch in ${SWARMUI_DIR}: ${CURRENT_BRANCH}"
+UNET_MODELS=(
+)
 
-    if [ "$CURRENT_BRANCH" != "$SWARMUI_BRANCH" ]; then
-        echo "Currently not on branch '${SWARMUI_BRANCH}'. Attempting to checkout '${SWARMUI_BRANCH}'..."
-        # Try to checkout the branch. If it doesn't exist locally, fetch it and then checkout.
-        if ! git checkout "${SWARMUI_BRANCH}" 2>/dev/null; then
-             echo "  Local branch '${SWARMUI_BRANCH}' not found or checkout failed. Fetching from origin..."
-             git fetch origin "${SWARMUI_BRANCH}:${SWARMUI_BRANCH}" # Fetch and create local tracking branch
-             if ! git checkout "${SWARMUI_BRANCH}"; then
-                echo "❌ Failed to checkout branch '${SWARMUI_BRANCH}' even after fetch."
-                popd > /dev/null
-                exit 1
-             fi
-        fi
-        echo "✅ Successfully checked out branch '${SWARMUI_BRANCH}'."
+LORA_MODELS=(
+)
+
+VAE_MODELS=(
+)
+
+ESRGAN_MODELS=(
+)
+
+CONTROLNET_MODELS=(
+)
+
+### DO NOT EDIT BELOW HERE UNLESS YOU KNOW WHAT YOU ARE DOING ###
+
+function provisioning_start() {
+    provisioning_print_header
+    provisioning_get_apt_packages   # System-level packages
+    provisioning_get_pip_packages   # Core Python packages (PyTorch, Triton, etc.)
+    provisioning_get_nodes          # ComfyUI custom nodes and their standard requirements.txt
+
+    # Install specific requirements for ComfyUI-Frame-Interpolation (requirements-with-cupy.txt)
+    # This runs after provisioning_get_nodes, which would have installed its regular requirements.txt (if present)
+    local frame_interp_req_cupy="${COMFYUI_DIR}/custom_nodes/ComfyUI-Frame-Interpolation/requirements-with-cupy.txt"
+    if [[ -f "$frame_interp_req_cupy" ]]; then
+        printf "Installing ComfyUI-Frame-Interpolation requirements (with cupy)...\n"
+        python -m pip install --no-cache-dir -r "$frame_interp_req_cupy"
     fi
     
-    LOCAL_COMMIT_HASH_BEFORE_PULL=$(git rev-parse HEAD)
-    echo "Fetching latest changes from remote 'origin' for ${SWARMUI_DIR_BASENAME}..."
-    git fetch origin --prune # Fetch updates for the 'origin' remote and prune stale branches
-    REMOTE_COMMIT_HASH=$(git rev-parse "origin/${SWARMUI_BRANCH}")
+    # Download models and other files
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/checkpoints" \
+        "${CHECKPOINT_MODELS[@]}"
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/unet" \
+        "${UNET_MODELS[@]}"
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/loras" \
+        "${LORA_MODELS[@]}" # Corrected path from lora to loras if that's ComfyUI standard
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/controlnet" \
+        "${CONTROLNET_MODELS[@]}"
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/vae" \
+        "${VAE_MODELS[@]}"
+    provisioning_get_files \
+        "${COMFYUI_DIR}/models/esrgan" \
+        "${ESRGAN_MODELS[@]}"
+    provisioning_print_end
+}
 
-    if [ "$LOCAL_COMMIT_HASH_BEFORE_PULL" == "$REMOTE_COMMIT_HASH" ]; then
-        echo "✅ ${SWARMUI_DIR_BASENAME} (branch ${SWARMUI_BRANCH}) is already up to date."
-    else
-        echo "Updating ${SWARMUI_DIR_BASENAME} (branch ${SWARMUI_BRANCH})..."
-        STASH_NEEDED=$(git status --porcelain | wc -l)
-        if [ "$STASH_NEEDED" -gt 0 ]; then
-            echo "  Local changes detected in ${SWARMUI_DIR}. Stashing before pull..."
-            git stash push -u -m "autostash_swarmui_update_$(date +%s)"
-        fi
-        
-        if git pull origin "${SWARMUI_BRANCH}"; then
-            echo "✅ ${SWARMUI_DIR_BASENAME} updated successfully. New commit: $(git rev-parse HEAD)"
-            if [ "$STASH_NEEDED" -gt 0 ]; then
-                echo "  Attempting to pop stashed changes in ${SWARMUI_DIR}..."
-                if git stash pop; then
-                    echo "  ✅ Stash popped successfully."
-                else
-                    echo "  ⚠️ Failed to pop stash in ${SWARMUI_DIR}. Manual conflict resolution might be needed."
+function provisioning_get_apt_packages() {
+    if [[ ${#APT_PACKAGES[@]} -gt 0 ]]; then # Check if array has elements
+        echo "Updating apt and installing APT packages: ${APT_PACKAGES[*]}..."
+        sudo apt-get update && sudo apt-get install -y ${APT_PACKAGES[@]}
+    fi
+}
+
+function provisioning_get_pip_packages() {
+    if [[ ${#PIP_PACKAGES[@]} -gt 0 ]]; then # Check if array has elements
+        echo "Installing PIP packages: ${PIP_PACKAGES[*]}..."
+        # Loop and install one by one to handle complex arguments in strings
+        for package_string in "${PIP_PACKAGES[@]}"; do
+            echo "Installing: $package_string"
+            # Using eval here is generally risky but might be necessary if package_string contains shell metacharacters
+            # or complex options not handled well by direct array expansion into pip.
+            # A safer approach if no complex shell interpretation is needed per string:
+            # python -m pip install --no-cache-dir $package_string (this splits package_string by spaces)
+            # For strings like "torch==X torchvision==Y --index-url Z", this works fine.
+            python -m pip install --no-cache-dir $package_string
+        done
+    fi
+}
+
+function provisioning_get_nodes() {
+    for repo in "${NODES[@]}"; do
+        # Extract dir name from repo URL (e.g., ComfyUI-Manager from https://github.com/ltdrdata/ComfyUI-Manager)
+        # More robustly handles .git suffix if present, though not typical for NODES array here.
+        dir_name=$(basename "${repo}" .git)
+        path="${COMFYUI_DIR}/custom_nodes/${dir_name}"
+        requirements="${path}/requirements.txt"
+
+        if [[ -d $path ]]; then
+            if [[ ${AUTO_UPDATE,,} != "false" ]]; then # Assuming AUTO_UPDATE is an env var
+                printf "Updating node: %s...\n" "${repo}"
+                ( cd "$path" && git pull )
+                if [[ -e $requirements ]]; then
+                   printf "Installing requirements for %s...\n" "${dir_name}"
+                   python -m pip install --no-cache-dir -r "$requirements"
                 fi
             fi
         else
-            echo "❌ Error: Failed to pull updates for ${SWARMUI_DIR_BASENAME} (branch ${SWARMUI_BRANCH})."
-            if [ "$STASH_NEEDED" -gt 0 ]; then
-                 echo "  Pull failed. Stashed changes (if any) are still saved. Consider manual intervention or a hard reset if local changes are not important."
-                 echo "  To view stashes: git stash list"
-                 echo "  To apply latest stash (after resolving pull issue): git stash pop"
-                 echo "  To discard latest stash: git stash drop"
+            printf "Downloading node: %s...\n" "${repo}"
+            git clone "${repo}" "${path}" --recursive
+            if [[ -e $requirements ]]; then
+                printf "Installing requirements for %s...\n" "${dir_name}"
+                python -m pip install --no-cache-dir -r "${requirements}"
             fi
-            popd > /dev/null
-            exit 1
         fi
-    fi
-    popd > /dev/null
-fi
-echo "✅ ${SWARMUI_DIR_BASENAME} check/update process complete."
+    done
+}
 
-# --- Modify and Run ComfyUI Installation Script ---
-SWARMUI_COMFY_INSTALL_SCRIPT_RELPATH="launchtools/comfy-install-linux.sh"
-SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH="${SWARMUI_DIR}/${SWARMUI_COMFY_INSTALL_SCRIPT_RELPATH}"
-
-if [ -f "$SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH" ]; then
-    echo "Ensuring ${SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH} is writable and executable..."
-    chmod u+w "$SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH"
-    chmod +x "$SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH" # Ensure original script is executable
-
-    NODES_TO_INSTALL_STR=(
-        "https://github.com/Comfy-Org/ComfyUI-Manager"
-        "https://github.com/kijai/ComfyUI-KJNodes"
-        "https://github.com/aria1th/ComfyUI-LogicUtils"
-        "https://github.com/crystian/ComfyUI-Crystools"
-        "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-        "https://github.com/rgthree/rgthree-comfy"
-        "https://github.com/calcuis/gguf"
-        "https://github.com/city96/ComfyUI-GGUF"
-    )
-
-    CUSTOM_NODE_INSTALL_LOGIC_MARKER="--- Starting ComfyUI Custom Node Installation (appended logic) ---"
-
-    # Check if the custom logic is already in the script to prevent appending multiple times
-    if ! grep -qF "$CUSTOM_NODE_INSTALL_LOGIC_MARKER" "$SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH"; then
-        echo "Custom node installation logic not found in ${SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH}. Appending..."
-        
-        CUSTOM_NODE_INSTALL_LOGIC=$(cat <<EOF
-
-echo ""
-echo "$CUSTOM_NODE_INSTALL_LOGIC_MARKER"
-# We are already in the ComfyUI directory (e.g., dlbackend/ComfyUI) at this point in comfy-install-linux.sh
-COMFYUI_BASE_DIR="\$(pwd)" # Use current directory as ComfyUI base
-CUSTOM_NODES_DIR="\${COMFYUI_BASE_DIR}/custom_nodes"
-mkdir -p "\${CUSTOM_NODES_DIR}"
-
-echo "Custom nodes will be installed in: \${CUSTOM_NODES_DIR}"
-echo "Using Python: \$python for node requirements installation."
-
-# Convert NODES_TO_INSTALL_STR to a bash array here
-# Note: This array definition is now part of the HEREDOC and will be evaluated by comfy-install-linux.sh
-declare -a NODES_TO_INSTALL_BASH_ARRAY=($(printf "'%s' " "${NODES_TO_INSTALL_STR[@]}"))
-
-for NODE_REPO_URL in "\${NODES_TO_INSTALL_BASH_ARRAY[@]}"; do
-    NODE_DIR_NAME=\$(basename "\${NODE_REPO_URL}" .git)
-    NODE_INSTALL_PATH="\${CUSTOM_NODES_DIR}/\${NODE_DIR_NAME}"
-
-    echo ""
-    echo "Processing node: \${NODE_DIR_NAME} (from \${NODE_REPO_URL})"
-    if [ -d "\${NODE_INSTALL_PATH}/.git" ]; then
-        echo "  Updating existing node \${NODE_DIR_NAME}..."
-        (cd "\${NODE_INSTALL_PATH}" && git stash push -u -m "autostash_node_\$(basename \${NODE_INSTALL_PATH})_\$(date +%s)" >/dev/null 2>&1)
-        if (cd "\${NODE_INSTALL_PATH}" && git pull --ff-only); then
-             (cd "\${NODE_INSTALL_PATH}" && git stash pop >/dev/null 2>&1 || true) 
-        else
-            echo "  WARN: Fast-forward pull failed for \${NODE_DIR_NAME}. Trying regular pull..."
-            (cd "\${NODE_INSTALL_PATH}" && git pull) || echo "  ERROR: Pull failed for \${NODE_DIR_NAME}."
-            (cd "\${NODE_INSTALL_PATH}" && git stash pop >/dev/null 2>&1 || true) 
-        fi
-    else
-        if [ -d "\${NODE_INSTALL_PATH}" ]; then
-             echo "  WARN: Directory \${NODE_INSTALL_PATH} exists but is not a git repo. Skipping."
-        else
-            echo "  Cloning new node \${NODE_DIR_NAME}..."
-            git clone --recursive "\${NODE_REPO_URL}" "\${NODE_INSTALL_PATH}"
-        fi
-    fi
-
-    # Proceed with requirements only if the node path exists and is a directory (after clone/pull attempt)
-    if [ -d "\${NODE_INSTALL_PATH}" ]; then
-        REQUIREMENTS_FILE="\${NODE_INSTALL_PATH}/requirements.txt"
-        if [ -f "\${REQUIREMENTS_FILE}" ]; then
-            echo "  Installing requirements for \${NODE_DIR_NAME} from \${REQUIREMENTS_FILE}..."
-            # Use the python executable defined by comfy-install-linux.sh
-            if \$python -s -m pip install --no-cache-dir -r "\${REQUIREMENTS_FILE}"; then
-                echo "  ✅ Requirements installed for \${NODE_DIR_NAME}."
-            else
-                echo "  ❌ Failed to install requirements for \${NODE_DIR_NAME}."
-            fi
-        else
-            echo "  No requirements.txt found for \${NODE_DIR_NAME}."
-        fi
-    else
-        echo "  WARN: Node directory \${NODE_INSTALL_PATH} not found after clone/pull attempt. Skipping requirements."
-    fi
-    echo "  Finished processing \${NODE_DIR_NAME}."
-done
-
-echo "--- ComfyUI Custom Node Installation Finished ---"
-echo ""
-EOF
-)
-        # Append the logic. Use printf to avoid issues with '%' in the logic.
-        printf '%s\n' "$CUSTOM_NODE_INSTALL_LOGIC" >> "$SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH"
-        echo "✅ Appended custom node installation logic to ${SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH}."
-    else
-        echo "ℹ️ Custom node installation logic (marker: '$CUSTOM_NODE_INSTALL_LOGIC_MARKER') already present in ${SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH}."
-    fi
-
-    GPU_TYPE_FOR_COMFY="nv" # Default for Vast.ai NVIDIA instances
-    if ! command -v nvidia-smi &> /dev/null; then
-        echo "nvidia-smi not found. This could mean it's an AMD GPU, CPU-only instance, or NVIDIA drivers are not (yet) loaded."
-        echo "The comfy-install-linux.sh script itself has GPU type validation."
-        echo "Proceeding with default GPU_TYPE=${GPU_TYPE_FOR_COMFY} for ComfyUI install."
-    else
-        echo "nvidia-smi found. Using GPU_TYPE=${GPU_TYPE_FOR_COMFY} for ComfyUI install."
-    fi
-
-    echo "Running the modified ${SWARMUI_COMFY_INSTALL_SCRIPT_RELPATH} from ${SWARMUI_DIR} with GPU_TYPE=${GPU_TYPE_FOR_COMFY}..."
+function provisioning_get_files() {
+    if [[ -z $2 ]]; then return 1; fi
     
-    pushd "${SWARMUI_DIR}" > /dev/null
-    # The comfy-install-linux.sh script is expected to be run from SwarmUI's base directory.
-    # It handles cd'ing into dlbackend/ComfyUI itself.
-    if ./"${SWARMUI_COMFY_INSTALL_SCRIPT_RELPATH}" "${GPU_TYPE_FOR_COMFY}"; then
-        echo "✅ ComfyUI installation (including custom nodes via modified script) appears successful."
-    else
-        echo "❌ ComfyUI installation (including custom nodes via modified script) failed. Check output above."
-        popd > /dev/null
-        exit 1
-    fi
-    popd > /dev/null
-else
-    echo "⚠️ Critical Warning: ${SWARMUI_COMFY_INSTALL_SCRIPT_FULLPATH} not found."
-    echo "   Cannot run ComfyUI automatic installation or install its custom nodes."
-    echo "   SwarmUI will likely not function correctly without the ComfyUI backend."
-    exit 1 # Exiting because ComfyUI setup is critical for SwarmUI
-fi
-# --- End SwarmUI ComfyUI Setup ---
+    dir="$1"
+    mkdir -p "$dir"
+    shift
+    arr=("$@")
+    if [[ ${#arr[@]} -eq 0 ]]; then return 0; fi # No files to download
+    printf "Downloading %s model(s) to %s...\n" "${#arr[@]}" "$dir"
+    for url in "${arr[@]}"; do
+        printf "Downloading: %s\n" "${url}"
+        provisioning_download "${url}" "${dir}"
+        printf "\n"
+    done
+}
 
-echo ""
-echo "Provisioning script finished. All operations based in /workspace/ completed."
-# The script will now exit. Other services (like Jupyter, Caddy) will be started by supervisor or other means.
+function provisioning_print_header() {
+    printf "\n##############################################\n#                                            #\n#          Provisioning container            #\n#                                            #\n#         This will take some time           #\n#                                            #\n# Your container will be ready on completion #\n#                                            #\n##############################################\n\n"
+}
+
+function provisioning_print_end() {
+    printf "\nProvisioning complete:  Application will start now\n\n"
+}
+
+# (Keep provisioning_has_valid_hf_token, provisioning_has_valid_civitai_token, and provisioning_download functions as they are)
+function provisioning_has_valid_hf_token() {
+    [[ -n "$HF_TOKEN" ]] || return 1
+    url="https://huggingface.co/api/whoami-v2"
+
+    response=$(curl -o /dev/null -s -w "%{http_code}" -X GET "$url" \
+        -H "Authorization: Bearer $HF_TOKEN" \
+        -H "Content-Type: application/json")
+
+    if [ "$response" -eq 200 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function provisioning_has_valid_civitai_token() {
+    [[ -n "$CIVITAI_TOKEN" ]] || return 1
+    url="https://civitai.com/api/v1/models?hidden=1&limit=1"
+
+    response=$(curl -o /dev/null -s -w "%{http_code}" -X GET "$url" \
+        -H "Authorization: Bearer $CIVITAI_TOKEN" \
+        -H "Content-Type: application/json")
+
+    if [ "$response" -eq 200 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function provisioning_download() {
+    local url="$1"
+    local dir="$2"
+    local dotbytes="${3:-4M}"
+    local auth_header=""
+
+    if [[ -n $HF_TOKEN && $url =~ ^https://([a-zA-Z0-9_-]+\.)?huggingface\.co(/|$|\?) ]]; then
+        auth_header="--header=Authorization: Bearer $HF_TOKEN"
+    elif [[ -n $CIVITAI_TOKEN && $url =~ ^https://([a-zA-Z0-9_-]+\.)?civitai\.com(/|$|\?) ]]; then
+        auth_header="--header=Authorization: Bearer $CIVITAI_TOKEN"
+    fi
+
+    # Use aria2c if available, otherwise wget
+    if command -v aria2c &> /dev/null; then
+        printf "Using aria2c for download...\n"
+        aria2c --console-log-level=error -c -x 16 -s 16 -k 1M ${auth_header} -d "$dir" -o "$(basename "$url" | sed 's/\?.*//')" "$url"
+    else
+        printf "Using wget for download...\n"
+        # The auth_header variable needs to be passed to wget carefully.
+        # If auth_header is empty, it should not pass an empty --header.
+        if [[ -n "$auth_header" ]]; then
+            wget $auth_header -qnc --content-disposition --show-progress -e dotbytes="$dotbytes" -P "$dir" "$url"
+        else
+            wget -qnc --content-disposition --show-progress -e dotbytes="$dotbytes" -P "$dir" "$url"
+        fi
+    fi
+}
+
+
+# Allow user to disable provisioning if they started with a script they didn't want
+if [[ ! -f /.noprovisioning ]]; then
+    provisioning_start
+fi
