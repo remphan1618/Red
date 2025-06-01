@@ -31,6 +31,9 @@ NODES=(
     "https://github.com/asagi4/ComfyUI-Adaptive-Guidance"
     "https://github.com/city96/ComfyUI-GGUF"
     "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+    "https://github.com/aria1th/ComfyUI-LogicUtils"
+    "https://github.com/rgthree/rgthree-comfy"
+    "https://github.com/crystian/ComfyUI-Crystools"
     #"https://github.com/other/node" # Add other ComfyUI nodes here
 )
 
@@ -39,7 +42,6 @@ WORKFLOWS=(
 )
 
 CHECKPOINT_MODELS=(
-    "https://civitai.com/api/download/models/798204?type=Model&format=SafeTensor&size=full&fp=fp16"
     # Add other checkpoint model URLs here
 )
 
