@@ -13,10 +13,12 @@ APT_PACKAGES=(
     #"package-2"
 )
 
+
 PIP_PACKAGES=(
     "-U --pre triton"
     "sageattention==1.0.6"
-    "torch==2.8.0.dev20250507+cu128 torchvision==0.22.0.dev20250508+cu128 torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall"
+    # Corrected torch version to match torchvision's dependency
+    "torch==2.8.0.dev20250508+cu128 torchvision==0.22.0.dev20250508+cu128 torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 --force-reinstall"
     #"package-1" # Other general pip packages
     #"package-2"
 )
